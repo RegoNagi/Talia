@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { getUserByCredentials } from './services/supabaseData';
+import { showToast } from './components/Toast';
 import { UserRole, Language, User, NavItem } from './types';
 import { Header } from './components/Header';
 import { ToastContainer } from './components/Toast';
@@ -63,6 +65,9 @@ const App: React.FC = () => {
     role: UserRole.ADMIN,
     avatar: 'https://i.pravatar.cc/150?u=sarah'
   });
+  // صلاحيات المستخدم الحقيقي المسجّل دخوله (فاضية لحسابات الديمو، أو لو الدور مش إداري)
+  const [userPermissions, setUserPermissions] = useState<string[]>([]);
+  const [loginError, setLoginError] = useState('');
 
   const handleDemoLogin = (demoRole: 'MOE' | 'school') => {
     const targetUsername = demoRole === 'MOE' ? 'MOE' : 'school';
@@ -93,29 +98,63 @@ const App: React.FC = () => {
     }, 80); // Speed of username typing
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!loginUsername || !loginPassword) return;
-    
+
+    setLoginError('');
     setIsLoading(true);
-    setTimeout(() => {
-      const demoRole = loginUsername.toLowerCase() === 'moe' ? 'MOE' : 'school';
-      setRole(demoRole);
-      setIsLoggedIn(true);
-      setActiveView(demoRole === 'MOE' ? 'moe-dashboard' : 'dashboard');
-      if (demoRole === 'MOE') {
-        setExpandedNav(prev => ({ ...prev, 'moe-dashboard': true }));
-      } else {
-        setExpandedNav(prev => ({ ...prev, 'dashboard': true }));
-      }
-      setIsLoading(false);
-    }, 800);
+
+    // اختصارات الديمو القديمة (وزارة / مدرسة) — بتفضل شغالة زي ما هي بالظبط، من غير أي تغيير
+    const isMOEDemo = loginUsername.toLowerCase() === 'moe';
+    const isSchoolDemo = loginUsername.toLowerCase() === 'school' && loginPassword === '123';
+
+    if (isMOEDemo || isSchoolDemo) {
+      setTimeout(() => {
+        const demoRole = isMOEDemo ? 'MOE' : 'school';
+        setRole(demoRole);
+        setUserPermissions([]);
+        setIsLoggedIn(true);
+        setActiveView(demoRole === 'MOE' ? 'moe-dashboard' : 'dashboard');
+        if (demoRole === 'MOE') {
+          setExpandedNav(prev => ({ ...prev, 'moe-dashboard': true }));
+        } else {
+          setExpandedNav(prev => ({ ...prev, 'dashboard': true }));
+        }
+        setIsLoading(false);
+      }, 800);
+      return;
+    }
+
+    // تسجيل دخول حقيقي: بيدوّر على المستخدم في قاعدة البيانات بنفس الإيميل والباسورد
+    const realUser = await getUserByCredentials(loginUsername, loginPassword);
+    setIsLoading(false);
+
+    if (!realUser) {
+      setLoginError('الإيميل أو كلمة المرور غلط.');
+      showToast('الإيميل أو كلمة المرور غلط.', 'error');
+      return;
+    }
+
+    setUser({
+      id: realUser.id,
+      name: realUser.name,
+      role: realUser.role as UserRole,
+      avatar: `https://ui-avatars.com/api/?name=${realUser.name}&background=random`,
+    });
+    setUserPermissions(realUser.permissions);
+    setRole('school');
+    setIsLoggedIn(true);
+    setActiveView('dashboard');
+    setExpandedNav(prev => ({ ...prev, 'dashboard': true }));
   };
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     setLoginUsername('');
     setLoginPassword('');
+    setUserPermissions([]);
+    setLoginError('');
     // Optionally reset role, but for demo context it's fine.
   };
 
@@ -273,7 +312,7 @@ const App: React.FC = () => {
           'users-students': 'students',
         };
         const activeTabStr = tabMap[activeView] as 'students' | 'parents' | 'teachers' | 'admins';
-        return <UserManagement language={language} role={user.role} onEditProfile={() => setActiveView('edit-profile')} activeTabProp={activeTabStr} onTabChange={(tab) => {
+        return <UserManagement language={language} role={user.role} permissions={userPermissions} onEditProfile={() => setActiveView('edit-profile')} activeTabProp={activeTabStr} onTabChange={(tab) => {
           const viewMap: Record<string, string> = {
             'students': 'users-students',
             'parents': 'users-parents',
@@ -352,6 +391,9 @@ const App: React.FC = () => {
             </div>
 
             <form onSubmit={handleLoginSubmit} className="space-y-5 relative z-10">
+              {loginError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-bold rounded-xl px-4 py-3">{loginError}</div>
+              )}
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">{isRTL ? 'اسم المستخدم أو البريد الإلكتروني' : 'Username or Email'}</label>
                 <div className="relative">

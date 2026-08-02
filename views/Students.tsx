@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers } from '../services/supabaseData';
+import { MOCK_PARENTS, CLASSES } from '../services/mockData';
+import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers, getAdmins, createAdmin, updateAdmin, deleteAdmin, bulkDeleteAdmins } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
@@ -40,6 +40,7 @@ interface UserManagementProps {
   onEditProfile?: () => void;
   activeTabProp?: 'students' | 'parents' | 'teachers' | 'admins';
   onTabChange?: (tab: 'students' | 'parents' | 'teachers' | 'admins') => void;
+  permissions?: string[];
 }
 
 // Mock Permission Data
@@ -372,7 +373,184 @@ const EditStudentModal: React.FC<{ student: any; onClose: () => void; onSubmit: 
   );
 };
 
-export const UserManagement: React.FC<UserManagementProps> = ({ language, role, onEditProfile, activeTabProp = 'students', onTabChange }) => {
+const DEPARTMENT_OPTIONS = ['Administration', 'Academics', 'Admissions', 'Finance', 'IT Support'];
+
+const PermissionsPicker: React.FC<{ permissions: string[]; onToggle: (id: string) => void }> = ({ permissions, onToggle }) => (
+  <div className="space-y-6 h-[400px] overflow-y-auto pr-2">
+    {PERMISSION_GROUPS.map((group) => (
+      <div key={group.category}>
+        <p className="text-xs font-bold text-gray-500 uppercase mb-3 sticky top-0 bg-gray-50 py-1">{group.category}</p>
+        <div className="space-y-2">
+          {group.perms.map((perm) => (
+            <div key={perm.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
+              <span className="text-sm font-medium text-gray-700">{perm.label}</span>
+              <button onClick={() => onToggle(perm.id)} className={`transition-colors ${permissions.includes(perm.id) ? 'text-green-500' : 'text-gray-300'}`}>
+                {permissions.includes(perm.id) ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+const AddAdminModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
+  const [form, setForm] = useState({ name: '', email: '', password: '', title: '', department: 'Administration', permissions: [] as string[] });
+  const [selectedTemplate, setSelectedTemplate] = useState('Custom');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleTemplateChange = (template: string) => {
+    setSelectedTemplate(template);
+    if (template !== 'Custom' && ADMIN_TEMPLATES[template]) {
+      setForm(prev => ({ ...prev, permissions: ADMIN_TEMPLATES[template], title: prev.title || template }));
+    }
+  };
+
+  const togglePermission = (id: string) => {
+    setForm(prev => ({ ...prev, permissions: prev.permissions.includes(id) ? prev.permissions.filter(p => p !== id) : [...prev.permissions, id] }));
+    setSelectedTemplate('Custom');
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return;
+    setIsSubmitting(true);
+    const ok = await onSubmit(form);
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+       <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+             <div>
+               <h3 className="text-xl font-bold text-gray-900">تكوين مسؤول</h3>
+               <p className="text-sm text-gray-500">Assign role-based access control (RBAC) permissions.</p>
+             </div>
+             <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-8">
+             <div className="flex-1 space-y-4">
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Role Template</label>
+                   <div className="relative">
+                      <select value={selectedTemplate} onChange={(e) => handleTemplateChange(e.target.value)} className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-gray-50 appearance-none font-medium">
+                         <option value="Custom">Custom Configuration</option>
+                         {Object.keys(ADMIN_TEMPLATES).map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                      <LayoutTemplate size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                   </div>
+                </div>
+                <hr className="border-gray-100" />
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
+                   <input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
+                   <input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور (لتسجيل الدخول)</label>
+                   <input type="text" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Role Title</label>
+                   <input type="text" placeholder="e.g. Registrar" value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">Department</label>
+                   <select value={form.department} onChange={(e) => setForm({...form, department: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                      {DEPARTMENT_OPTIONS.map(d => <option key={d}>{d}</option>)}
+                   </select>
+                </div>
+             </div>
+             <div className="flex-1 bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                   <h4 className="font-bold text-gray-900 flex items-center gap-2"><Lock size={16}/> Access Permissions</h4>
+                   <span className="text-xs font-bold bg-violet-100 text-violet-700 px-2 py-1 rounded-md">{form.permissions.length} Active</span>
+                </div>
+                <PermissionsPicker permissions={form.permissions} onToggle={togglePermission} />
+             </div>
+          </div>
+          <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+             <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
+             <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting ? 'جاري الإنشاء...' : 'إنشاء مسؤول'}</Button>
+          </div>
+       </div>
+    </div>
+  );
+};
+
+const EditAdminModal: React.FC<{ admin: any; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ admin, onClose, onSubmit }) => {
+  const [form, setForm] = useState({
+    name: admin.name || '', email: admin.email || '', title: admin.title || '',
+    department: admin.department || 'Administration', permissions: admin.permissions || [] as string[]
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const togglePermission = (id: string) => {
+    setForm(prev => ({ ...prev, permissions: prev.permissions.includes(id) ? prev.permissions.filter((p: string) => p !== id) : [...prev.permissions, id] }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return;
+    setIsSubmitting(true);
+    const ok = await onSubmit(form);
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+       <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الإداري</h3>
+             <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
+          </div>
+          <div className="flex flex-col lg:flex-row gap-8">
+             <div className="flex-1 space-y-4">
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
+                   <input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
+                   <input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">المسمى الوظيفي</label>
+                   <input type="text" value={form.title} onChange={(e) => setForm({...form, title: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                   <label className="block text-sm font-bold text-gray-700 mb-2">القسم</label>
+                   <select value={form.department} onChange={(e) => setForm({...form, department: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                      {DEPARTMENT_OPTIONS.map(d => <option key={d}>{d}</option>)}
+                   </select>
+                </div>
+             </div>
+             <div className="flex-1 bg-gray-50 rounded-2xl p-6 border border-gray-100">
+                <div className="flex justify-between items-center mb-4">
+                   <h4 className="font-bold text-gray-900 flex items-center gap-2"><Lock size={16}/> الصلاحيات</h4>
+                   <span className="text-xs font-bold bg-violet-100 text-violet-700 px-2 py-1 rounded-md">{form.permissions.length} فعّالة</span>
+                </div>
+                <PermissionsPicker permissions={form.permissions} onToggle={togglePermission} />
+             </div>
+          </div>
+          <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+             <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
+             <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700 text-white" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}</Button>
+          </div>
+       </div>
+    </div>
+  );
+};
+
+export const UserManagement: React.FC<UserManagementProps> = ({ language, role, onEditProfile, activeTabProp = 'students', onTabChange, permissions = [] }) => {
+  // لو مفيش صلاحيات محددة (زي أدوار الديمو القديمة) نسيبها مفتوحة زي ما كانت، عشان ميحصلش كسر مفاجئ
+  const canManageUsers = permissions.length === 0 || permissions.includes('users_create');
+  const canDeleteUsers = permissions.length === 0 || permissions.includes('users_delete');
   const isRTL = language === Language.AR;
   const [activeTab, setActiveTabInternal] = useState<'students' | 'parents' | 'teachers' | 'admins'>(activeTabProp);
 
@@ -394,7 +572,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   const [parentsList, setParentsList] = useState<Parent[]>(MOCK_PARENTS);
   const [teachersList, setTeachersList] = useState<Teacher[]>([]);
   const [teachersLoading, setTeachersLoading] = useState<boolean>(true);
-  const [adminsList, setAdminsList] = useState<Admin[]>(MOCK_ADMINS);
+  const [adminsList, setAdminsList] = useState<any[]>([]);
+  const [adminsLoading, setAdminsLoading] = useState<boolean>(true);
+  const refreshAdmins = () => {
+    setAdminsLoading(true);
+    getAdmins().then((data) => {
+      setAdminsList(data);
+      setAdminsLoading(false);
+    });
+  };
 
   const refreshTeachers = () => {
     setTeachersLoading(true);
@@ -415,11 +601,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   useEffect(() => {
     setStudentsLoading(true);
     setTeachersLoading(true);
-    Promise.all([getStudents(), getTeachers()]).then(([studentsData, teachersData]) => {
+    setAdminsLoading(true);
+    Promise.all([getStudents(), getTeachers(), getAdmins()]).then(([studentsData, teachersData, adminsData]) => {
       setStudentsList(studentsData);
       setTeachersList(teachersData);
+      setAdminsList(adminsData);
       setStudentsLoading(false);
       setTeachersLoading(false);
+      setAdminsLoading(false);
     });
   }, []);
 
@@ -543,30 +732,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
     }
   };
 
-  // Admin Form
-  const [newAdmin, setNewAdmin] = useState({
-     name: '', email: '', title: '', department: 'Administration'
-  });
-  const [adminPermissions, setAdminPermissions] = useState<string[]>([]);
-  const [selectedAdminTemplate, setSelectedAdminTemplate] = useState('Custom');
-
-  const handleTemplateChange = (template: string) => {
-      setSelectedAdminTemplate(template);
-      if (template !== 'Custom' && ADMIN_TEMPLATES[template]) {
-          setAdminPermissions(ADMIN_TEMPLATES[template]);
-          // Auto-set title if empty
-          if (!newAdmin.title) setNewAdmin(prev => ({...prev, title: template}));
-      }
-  };
-
-  const togglePermission = (id: string) => {
-     if (adminPermissions.includes(id)) {
-        setAdminPermissions(prev => prev.filter(p => p !== id));
-        setSelectedAdminTemplate('Custom');
-     } else {
-        setAdminPermissions(prev => [...prev, id]);
-        setSelectedAdminTemplate('Custom');
-     }
+  // تعديل وحذف الإداريين
+  const [openAdminMenu, setOpenAdminMenu] = useState<string | null>(null);
+  const [editingAdmin, setEditingAdmin] = useState<any | null>(null);
+  const [selectedAdminIds, setSelectedAdminIds] = useState<string[]>([]);
+  const toggleSelectAdmin = (id: string) => {
+    setSelectedAdminIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
   const handleCreateStudent = async (form: any): Promise<boolean> => {
@@ -603,23 +774,69 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       return !!id;
   };
 
-  const handleCreateAdmin = () => {
-      const admin: Admin = {
-          id: `adm-${Date.now()}`,
-          name: newAdmin.name || 'New Admin',
-          role: UserRole.ADMIN,
-          avatar: `https://ui-avatars.com/api/?name=${newAdmin.name}&background=random`,
-          email: newAdmin.email,
-          title: newAdmin.title,
-          department: newAdmin.department,
-          permissions: adminPermissions,
-          lastActive: 'Just now'
-      };
-      setAdminsList([admin, ...adminsList]);
-      setIsAddAdminOpen(false);
-      setNewAdmin({ name: '', email: '', title: '', department: 'Administration' });
-      setAdminPermissions([]);
-      setSelectedAdminTemplate('Custom');
+  const handleCreateAdmin = async (form: any): Promise<boolean> => {
+      if (!form.name.trim()) return false;
+      const id = await createAdmin({
+        name: form.name,
+        email: form.email,
+        password: form.password,
+        title: form.title,
+        department: form.department,
+        permissions: form.permissions,
+      });
+      if (id) {
+        refreshAdmins();
+        showToast('تم إضافة الإداري بنجاح.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء إنشاء الإداري. تأكد إنك شغّلت كود إنشاء جدولي admins وadmin_permissions في Supabase.', 'error');
+      }
+      return !!id;
+  };
+
+  const handleUpdateAdmin = async (form: any): Promise<boolean> => {
+      if (!editingAdmin) return false;
+      const ok = await updateAdmin({
+        adminId: editingAdmin.id,
+        userId: editingAdmin.userId,
+        name: form.name,
+        email: form.email,
+        title: form.title,
+        department: form.department,
+        permissions: form.permissions,
+      });
+      if (ok) {
+        refreshAdmins();
+        showToast('تم تعديل بيانات الإداري بنجاح.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء تعديل الإداري.', 'error');
+      }
+      return ok;
+  };
+
+  const handleDeleteAdmin = async (admin: any) => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح "${admin.name}"؟ الإجراء ده مينفعش يترجع.`, 'حذف');
+    if (!confirmed) return;
+    const ok = await deleteAdmin(admin.userId);
+    if (ok) {
+      refreshAdmins();
+      showToast('تم حذف الإداري.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء حذف الإداري.', 'error');
+    }
+  };
+
+  const handleBulkDeleteAdmins = async () => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح ${selectedAdminIds.length} إداري؟ الإجراء ده مينفعش يترجع.`, 'حذف الكل');
+    if (!confirmed) return;
+    const userIds = adminsList.filter(a => selectedAdminIds.includes(a.id)).map(a => a.userId);
+    const ok = await bulkDeleteAdmins(userIds);
+    if (ok) {
+      refreshAdmins();
+      setSelectedAdminIds([]);
+      showToast('تم حذف الإداريين المحددين.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف الجماعي.', 'error');
+    }
   };
 
   // Filter States
@@ -703,9 +920,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
              <Button variant="secondary" onClick={() => setUploadModalType('student')} className="flex-1 sm:flex-none justify-center whitespace-nowrap">
                 <Upload size={18} /> {t_import}
              </Button>
+             {canManageUsers && (
              <Button variant="primary" onClick={() => setIsAddStudentOpen(true)} className="flex-1 sm:flex-none justify-center bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap rounded-lg">
                 <Plus size={18} /> {t_add_student}
              </Button>
+             )}
           </div>
        </div>
 
@@ -797,7 +1016,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                       {openStudentMenu === student.id && (
                         <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-32" onMouseLeave={() => setOpenStudentMenu(null)}>
                           <button onClick={() => { setEditingStudent(student); setOpenStudentMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
-                          <button onClick={() => { handleDeleteStudent(student); setOpenStudentMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                          {canDeleteUsers && <button onClick={() => { handleDeleteStudent(student); setOpenStudentMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>}
                         </div>
                       )}
                       <button onClick={() => setSelectedStudent(student)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
@@ -864,9 +1083,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
               <Button variant="secondary" onClick={() => setUploadModalType('teacher')} className="shadow-sm whitespace-nowrap">
                  <Upload size={18} /> {t.bulkImport}
               </Button>
+              {canManageUsers && (
               <Button variant="primary" onClick={() => setIsAddTeacherOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white shadow-violet-200 whitespace-nowrap rounded-lg">
                  <Plus size={18} /> {t.addTeacher}
               </Button>
+              )}
            </div>
         </div>
 
@@ -904,7 +1125,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                          {openTeacherMenu === teacher.id && (
                            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-36" onMouseLeave={() => setOpenTeacherMenu(null)}>
                              <button onClick={() => { setEditingTeacher(teacher); setOpenTeacherMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
-                             <button onClick={() => { handleDeleteTeacher(teacher); setOpenTeacherMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                             {canDeleteUsers && <button onClick={() => { handleDeleteTeacher(teacher); setOpenTeacherMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>}
                            </div>
                          )}
                        </div>
@@ -1005,15 +1226,30 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
               <h2 className="text-3xl font-bold">{t.manageRoles}</h2>
               <p className="text-violet-200 max-w-xl">{t.subtitle}</p>
            </div>
+           {canManageUsers && (
            <Button variant="primary" onClick={() => setIsAddAdminOpen(true)} className="relative z-10 mt-6 md:mt-0 bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap rounded-lg shadow-sm border border-violet-500/30">
               <Plus size={16} /> {t.addNewAdmin}
            </Button>
+           )}
         </div>
+
+        {selectedAdminIds.length > 0 && (
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-violet-800">{selectedAdminIds.length} إداري محدد</span>
+            <div className="flex gap-2">
+              <button onClick={() => setSelectedAdminIds([])} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-white rounded-lg">إلغاء التحديد</button>
+              <button onClick={handleBulkDeleteAdmins} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">حذف المحدد</button>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
            <table className={`w-full ${isRTL ? 'text-right' : 'text-left'}`}>
               <thead className="bg-gray-50 text-gray-500 font-semibold text-sm">
                  <tr>
+                    <th className="px-4 py-4 w-10">
+                       <input type="checkbox" checked={adminsList.length > 0 && selectedAdminIds.length === adminsList.length} onChange={() => setSelectedAdminIds(selectedAdminIds.length === adminsList.length ? [] : adminsList.map(a => a.id))} />
+                    </th>
                     <th className="px-6 py-4">{t.user}</th>
                     <th className="px-6 py-4">{t.roleTitle}</th>
                     <th className="px-6 py-4">{t.department}</th>
@@ -1023,11 +1259,20 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                  </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
+                 {adminsLoading && (
+                    <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">جاري تحميل الإداريين...</td></tr>
+                 )}
+                 {!adminsLoading && adminsList.length === 0 && (
+                    <tr><td colSpan={7} className="px-6 py-10 text-center text-gray-400">لا يوجد إداريين بعد</td></tr>
+                 )}
                  {adminsList.map(admin => (
                     <tr key={admin.id} className="hover:bg-gray-50 transition-colors">
+                       <td className="px-4 py-4">
+                          <input type="checkbox" checked={selectedAdminIds.includes(admin.id)} onChange={() => toggleSelectAdmin(admin.id)} />
+                       </td>
                        <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
-                             <img src={admin.avatar} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover" alt="" />
+                             <img src={admin.avatar || `https://ui-avatars.com/api/?name=${admin.name}&background=random`} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover" alt="" />
                              <div>
                                 <p className="font-bold text-gray-900 text-sm">{trName(admin.name)}</p>
                                 <p className="text-xs text-gray-400" dir="ltr">{admin.email}</p>
@@ -1042,12 +1287,12 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                               ? 'text-green-600 bg-green-50' 
                               : 'text-gray-600 bg-gray-50'
                           }`}>
-                             {admin.lastActive === 'Active now' && <div className="w-2 h-2 rounded-full bg-green-500"></div>} {trRoleDeptStatus(admin.lastActive)}
+                             {admin.lastActive === 'Active now' && <div className="w-2 h-2 rounded-full bg-green-500"></div>} {trRoleDeptStatus(admin.lastActive || 'Active')}
                           </span>
                        </td>
                        <td className="px-6 py-4">
                           <div className="flex flex-wrap gap-1">
-                             {admin.permissions.slice(0, 2).map(p => (
+                             {admin.permissions.slice(0, 2).map((p: string) => (
                                 <span key={p} className="text-[10px] bg-gray-100 border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
                                    {p.replace('_', ' ')}
                                 </span>
@@ -1059,8 +1304,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                              )}
                           </div>
                        </td>
-                       <td className={`px-6 py-4 ${isRTL ? 'text-left' : 'text-right'}`}>
-                          <button className="text-gray-400 hover:text-violet-600 transition-colors"><Settings size={18}/></button>
+                       <td className={`px-6 py-4 ${isRTL ? 'text-left' : 'text-right'} relative`}>
+                          <button onClick={() => setOpenAdminMenu(openAdminMenu === admin.id ? null : admin.id)} className="text-gray-400 hover:text-violet-600 transition-colors"><Settings size={18}/></button>
+                          {openAdminMenu === admin.id && (
+                            <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-32" onMouseLeave={() => setOpenAdminMenu(null)}>
+                              <button onClick={() => { setEditingAdmin(admin); setOpenAdminMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
+                              {canDeleteUsers && <button onClick={() => { handleDeleteAdmin(admin); setOpenAdminMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>}
+                            </div>
+                          )}
                        </td>
                     </tr>
                  ))}
@@ -1130,120 +1381,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
 
        {/* 4. ADD ADMIN MODAL */}
        {isAddAdminOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
-             <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-6">
-                   <div>
-                     <h3 className="text-xl font-bold text-gray-900">{isRTL ? "تكوين مسؤول" : "Configure Administrator"}</h3>
-                     <p className="text-sm text-gray-500">Assign role-based access control (RBAC) permissions.</p>
-                   </div>
-                   <button onClick={() => setIsAddAdminOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
-                </div>
-                
-                <div className="flex flex-col lg:flex-row gap-8">
-                   {/* Left: Basic Info */}
-                   <div className="flex-1 space-y-4">
-                      <div>
-                         <label className="block text-sm font-bold text-gray-700 mb-2">Role Template</label>
-                         <div className="relative">
-                            <select 
-                              value={selectedAdminTemplate}
-                              onChange={(e) => handleTemplateChange(e.target.value)}
-                              className="w-full border border-gray-200 rounded-xl pl-4 pr-10 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-gray-50 appearance-none font-medium"
-                            >
-                               <option value="Custom">Custom Configuration</option>
-                               {Object.keys(ADMIN_TEMPLATES).map(t => (
-                                  <option key={t} value={t}>{t}</option>
-                               ))}
-                            </select>
-                            <LayoutTemplate size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                         </div>
-                         <p className="text-xs text-gray-500 mt-1">Select a template to auto-configure permissions.</p>
-                      </div>
-
-                      <hr className="border-gray-100" />
-
-                      <div>
-                         <label className="block text-sm font-bold text-gray-700 mb-2">Full Name</label>
-                         <input 
-                           type="text" 
-                           value={newAdmin.name}
-                           onChange={(e) => setNewAdmin({...newAdmin, name: e.target.value})}
-                           className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" 
-                        />
-                      </div>
-                      <div>
-                         <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
-                         <input 
-                           type="email" 
-                           value={newAdmin.email}
-                           onChange={(e) => setNewAdmin({...newAdmin, email: e.target.value})}
-                           className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" 
-                        />
-                      </div>
-                      <div>
-                         <label className="block text-sm font-bold text-gray-700 mb-2">Role Title</label>
-                         <input 
-                           type="text" 
-                           placeholder="e.g. Registrar" 
-                           value={newAdmin.title}
-                           onChange={(e) => setNewAdmin({...newAdmin, title: e.target.value})}
-                           className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" 
-                        />
-                      </div>
-                      <div>
-                         <label className="block text-sm font-bold text-gray-700 mb-2">Department</label>
-                         <select 
-                           value={newAdmin.department}
-                           onChange={(e) => setNewAdmin({...newAdmin, department: e.target.value})}
-                           className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white"
-                         >
-                           <option>Administration</option>
-                           <option>Academics</option>
-                           <option>Admissions</option>
-                           <option>Finance</option>
-                           <option>IT Support</option>
-                         </select>
-                      </div>
-                   </div>
-
-                   {/* Right: Permissions */}
-                   <div className="flex-1 bg-gray-50 rounded-2xl p-6 border border-gray-100">
-                      <div className="flex justify-between items-center mb-4">
-                        <h4 className="font-bold text-gray-900 flex items-center gap-2"><Lock size={16}/> Access Permissions</h4>
-                        <span className="text-xs font-bold bg-violet-100 text-violet-700 px-2 py-1 rounded-md">{adminPermissions.length} Active</span>
-                      </div>
-                      
-                      <div className="space-y-6 h-[400px] overflow-y-auto pr-2">
-                         {PERMISSION_GROUPS.map((group) => (
-                            <div key={group.category}>
-                               <p className="text-xs font-bold text-gray-500 uppercase mb-3 sticky top-0 bg-gray-50 py-1">{group.category}</p>
-                               <div className="space-y-2">
-                                  {group.perms.map((perm) => (
-                                     <div key={perm.id} className="flex items-center justify-between bg-white p-3 rounded-xl border border-gray-200 shadow-sm">
-                                        <span className="text-sm font-medium text-gray-700">{perm.label}</span>
-                                        <button 
-                                          onClick={() => togglePermission(perm.id)}
-                                          className={`transition-colors ${adminPermissions.includes(perm.id) ? 'text-green-500' : 'text-gray-300'}`}
-                                        >
-                                           {adminPermissions.includes(perm.id) ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
-                                        </button>
-                                     </div>
-                                  ))}
-                               </div>
-                            </div>
-                         ))}
-                      </div>
-                   </div>
-                </div>
-
-                <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
-                   <Button variant="secondary" className="flex-1" onClick={() => setIsAddAdminOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
-                   <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700 text-white" onClick={handleCreateAdmin}>{isRTL ? "إنشاء مسؤول" : "Create Administrator"}</Button>
-                </div>
-             </div>
-          </div>
+         <AddAdminModal onClose={() => setIsAddAdminOpen(false)} onSubmit={handleCreateAdmin} />
        )}
+
+       {/* EDIT ADMIN MODAL */}
+       {editingAdmin && (
+         <EditAdminModal admin={editingAdmin} onClose={() => setEditingAdmin(null)} onSubmit={handleUpdateAdmin} />
+       )}
+
 
        {/* Header & Tabs */}
        <div className={`flex flex-col md:flex-row justify-between items-end md:items-center gap-4 ${isRTL ? 'flex-row-reverse' : ''}`}>

@@ -649,3 +649,171 @@ export async function bulkDeleteClassSections(sectionIds: string[]): Promise<boo
   }
   return true;
 }
+
+// بيجيب الإداريين الحقيقيين مع صلاحياتهم
+export async function getAdmins(): Promise<{ id: string; userId: string; name: string; email: string; title: string; department: string; permissions: string[] }[]> {
+  const { data, error } = await supabase
+    .from('admins')
+    .select(`
+      id,
+      user_id,
+      title,
+      department,
+      users ( name, email ),
+      admin_permissions ( permission )
+    `);
+
+  if (error) {
+    console.error('Error fetching admins:', error);
+    return [];
+  }
+
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    name: row.users?.name ?? 'بدون اسم',
+    email: row.users?.email ?? '',
+    title: row.title ?? '',
+    department: row.department ?? '',
+    permissions: (row.admin_permissions || []).map((p: any) => p.permission),
+  }));
+}
+
+// بينشئ إداري حقيقي جديد
+export async function createAdmin(input: {
+  name: string;
+  email: string;
+  password: string;
+  title: string;
+  department: string;
+  permissions: string[];
+}): Promise<string | null> {
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .insert({ name: input.name, role: 'ADMIN', email: input.email?.trim() ? input.email.trim() : null, password: input.password || null })
+    .select('id')
+    .single();
+
+  if (userError || !userRow) {
+    console.error('Error creating admin user:', userError);
+    return null;
+  }
+
+  const { data: adminRow, error: adminError } = await supabase
+    .from('admins')
+    .insert({ user_id: userRow.id, title: input.title, department: input.department })
+    .select('id')
+    .single();
+
+  if (adminError || !adminRow) {
+    console.error('Error creating admin record:', adminError);
+    return null;
+  }
+
+  if (input.permissions.length > 0) {
+    const rows = input.permissions.map((p) => ({ admin_id: adminRow.id, permission: p }));
+    const { error } = await supabase.from('admin_permissions').insert(rows);
+    if (error) console.error('Error linking admin permissions:', error);
+  }
+
+  return adminRow.id;
+}
+
+// بيعدّل بيانات إداري موجود
+export async function updateAdmin(input: {
+  adminId: string;
+  userId: string;
+  name: string;
+  email: string;
+  title: string;
+  department: string;
+  permissions: string[];
+}): Promise<boolean> {
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ name: input.name, email: input.email?.trim() ? input.email.trim() : null })
+    .eq('id', input.userId);
+  if (userError) {
+    console.error('Error updating admin user:', userError);
+    return false;
+  }
+
+  const { error: adminError } = await supabase
+    .from('admins')
+    .update({ title: input.title, department: input.department })
+    .eq('id', input.adminId);
+  if (adminError) {
+    console.error('Error updating admin record:', adminError);
+    return false;
+  }
+
+  await supabase.from('admin_permissions').delete().eq('admin_id', input.adminId);
+  if (input.permissions.length > 0) {
+    const rows = input.permissions.map((p) => ({ admin_id: input.adminId, permission: p }));
+    const { error } = await supabase.from('admin_permissions').insert(rows);
+    if (error) console.error('Error re-linking admin permissions:', error);
+  }
+
+  return true;
+}
+
+// بيمسح إداري واحد
+export async function deleteAdmin(userId: string): Promise<boolean> {
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) {
+    console.error('Error deleting admin:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح مجموعة إداريين دفعة واحدة
+export async function bulkDeleteAdmins(userIds: string[]): Promise<boolean> {
+  if (userIds.length === 0) return true;
+  const { error } = await supabase.from('users').delete().in('id', userIds);
+  if (error) {
+    console.error('Error bulk deleting admins:', error);
+    return false;
+  }
+  return true;
+}
+
+// تسجيل دخول حقيقي: بيدوّر على مستخدم بنفس الإيميل والباسورد، وبيجيب دوره وصلاحياته لو كان إداري
+export async function getUserByCredentials(email: string, password: string): Promise<{
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  permissions: string[];
+} | null> {
+  const { data: userRow, error } = await supabase
+    .from('users')
+    .select('id, name, role, email, password')
+    .eq('email', email)
+    .eq('password', password)
+    .maybeSingle();
+
+  if (error || !userRow) {
+    return null;
+  }
+
+  let permissions: string[] = [];
+  if (userRow.role === 'ADMIN' || userRow.role === 'SUPER_ADMIN') {
+    const { data: adminRow } = await supabase
+      .from('admins')
+      .select('id, admin_permissions ( permission )')
+      .eq('user_id', userRow.id)
+      .maybeSingle();
+    if (adminRow) {
+      permissions = ((adminRow as any).admin_permissions || []).map((p: any) => p.permission);
+    }
+  }
+
+  return {
+    id: userRow.id,
+    name: userRow.name,
+    role: userRow.role,
+    email: userRow.email,
+    permissions,
+  };
+}
