@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents, getTeachers, createTeacher, createStudent } from '../services/supabaseData';
+import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher } from '../services/supabaseData';
+import { showToast } from '../components/Toast';
+import { showToast } from '../components/Toast';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
 import { ParentsManagement } from './ParentsManagement';
 import { StudentProfile } from './StudentProfile';
@@ -167,6 +169,68 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
     }));
   };
 
+  // تعديل وحذف المعلمين
+  const [openTeacherMenu, setOpenTeacherMenu] = useState<string | null>(null);
+  const [editingTeacher, setEditingTeacher] = useState<any | null>(null);
+  const [editTeacherForm, setEditTeacherForm] = useState({
+    name: '', email: '', type: 'Full-time', subjects: [] as string[], allSubjects: false, grades: [] as string[], teacherType: 'Main' as 'Main' | 'Assistant'
+  });
+  const [isUpdatingTeacher, setIsUpdatingTeacher] = useState(false);
+  const toggleEditTeacherGrade = (grade: string) => {
+    setEditTeacherForm(prev => ({ ...prev, grades: prev.grades.includes(grade) ? prev.grades.filter(g => g !== grade) : [...prev.grades, grade] }));
+  };
+  const toggleEditTeacherSubject = (subject: string) => {
+    setEditTeacherForm(prev => ({ ...prev, allSubjects: false, subjects: prev.subjects.includes(subject) ? prev.subjects.filter(s => s !== subject) : [...prev.subjects, subject] }));
+  };
+
+  const openEditTeacher = (teacher: any) => {
+    setEditingTeacher(teacher);
+    setEditTeacherForm({
+      name: teacher.name || '',
+      email: teacher.email || '',
+      type: teacher.employmentType || 'Full-time',
+      subjects: teacher.subjects || [],
+      allSubjects: (teacher.subjects || []).length >= SUBJECT_OPTIONS.length,
+      grades: teacher.grades || [],
+      teacherType: teacher.teacherType || 'Main',
+    });
+  };
+
+  const handleUpdateTeacher = async () => {
+    if (!editingTeacher || !editTeacherForm.name.trim()) return;
+    setIsUpdatingTeacher(true);
+    const ok = await updateTeacher({
+      teacherId: editingTeacher.id,
+      userId: editingTeacher.userId,
+      name: editTeacherForm.name,
+      email: editTeacherForm.email,
+      employmentType: editTeacherForm.type,
+      subjects: editTeacherForm.subjects,
+      allSubjects: editTeacherForm.allSubjects,
+      grades: editTeacherForm.grades,
+      teacherType: editTeacherForm.teacherType,
+    });
+    setIsUpdatingTeacher(false);
+    if (ok) {
+      refreshTeachers();
+      setEditingTeacher(null);
+      showToast('تم تعديل بيانات المعلم بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء تعديل المعلم.', 'error');
+    }
+  };
+
+  const handleDeleteTeacher = async (teacher: any) => {
+    if (!confirm(`متأكد إنك عايز تمسح "${teacher.name}"؟ الإجراء ده مينفعش يترجع.`)) return;
+    const ok = await deleteTeacher(teacher.userId);
+    if (ok) {
+      refreshTeachers();
+      showToast('تم حذف المعلم.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء حذف المعلم.', 'error');
+    }
+  };
+
   // Admin Form
   const [newAdmin, setNewAdmin] = useState({
      name: '', email: '', title: '', department: 'Administration'
@@ -210,7 +274,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         setIsAddStudentOpen(false);
         setNewStudent({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: '' });
       } else {
-        alert('حصل خطأ أثناء إنشاء الطالب. راجع الـ Console (F12) لمعرفة التفاصيل.');
+        showToast('حصل خطأ أثناء إنشاء الطالب. راجع الـ Console (F12) لمعرفة التفاصيل.', 'error');
       }
   };
 
@@ -235,7 +299,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         setIsAddTeacherOpen(false);
         setNewTeacher({ name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time', subjects: [], allSubjects: false, grades: [], teacherType: 'Main' });
       } else {
-        alert('حصل خطأ أثناء إنشاء المعلم. تأكد إنك شغّلت كود إضافة عمود hiring_date في Supabase.');
+        showToast('حصل خطأ أثناء إنشاء المعلم. تأكد إنك شغّلت كود إضافة عمود hiring_date في Supabase.', 'error');
       }
   };
 
@@ -497,7 +561,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                              </div>
                           </div>
                        </div>
-                       <button className="text-gray-300 hover:text-gray-600"><MoreVertical size={20} /></button>
+                       <div className="relative">
+                         <button onClick={() => setOpenTeacherMenu(openTeacherMenu === teacher.id ? null : teacher.id)} className="text-gray-300 hover:text-gray-600"><MoreVertical size={20} /></button>
+                         {openTeacherMenu === teacher.id && (
+                           <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-36" onMouseLeave={() => setOpenTeacherMenu(null)}>
+                             <button onClick={() => { openEditTeacher(teacher); setOpenTeacherMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
+                             <button onClick={() => { handleDeleteTeacher(teacher); setOpenTeacherMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                           </div>
+                         )}
+                       </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 mb-6">
@@ -911,6 +983,82 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                 <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
                    <Button variant="secondary" className="flex-1" onClick={() => setIsAddTeacherOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
                    <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={isCreatingTeacher} onClick={handleCreateTeacher}>{isCreatingTeacher ? 'جاري الإنشاء...' : 'Create Teacher'}</Button>
+                </div>
+             </div>
+          </div>
+       )}
+
+       {/* EDIT TEACHER MODAL */}
+       {editingTeacher && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+             <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-6">
+                   <div>
+                     <h3 className="text-xl font-bold text-gray-900">تعديل بيانات المعلم</h3>
+                   </div>
+                   <button onClick={() => setEditingTeacher(null)} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
+                      <input 
+                        type="text" 
+                        value={editTeacherForm.name}
+                        onChange={(e) => setEditTeacherForm({...editTeacherForm, name: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" 
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
+                      <input 
+                        type="email" 
+                        value={editTeacherForm.email}
+                        onChange={(e) => setEditTeacherForm({...editTeacherForm, email: e.target.value})}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" 
+                      />
+                   </div>
+                   <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">نوع التوظيف</label>
+                      <select 
+                        value={editTeacherForm.type}
+                        onChange={(e) => setEditTeacherForm({...editTeacherForm, type: e.target.value as any})}
+                        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white"
+                      >
+                        <option value="Full-time">Full-time</option>
+                        <option value="Part-time">Part-time</option>
+                        <option value="Contract">Contract</option>
+                      </select>
+                   </div>
+                   <div>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">نوع المعلم</label>
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => setEditTeacherForm({...editTeacherForm, teacherType: 'Main'})} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${editTeacherForm.teacherType === 'Main' ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>مدرس رئيسي</button>
+                        <button type="button" onClick={() => setEditTeacherForm({...editTeacherForm, teacherType: 'Assistant'})} className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${editTeacherForm.teacherType === 'Assistant' ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>مدرس مساعد</button>
+                      </div>
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">المواد اللي بيدرّسها</label>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" onClick={() => setEditTeacherForm({...editTeacherForm, allSubjects: !editTeacherForm.allSubjects, subjects: []})} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${editTeacherForm.allSubjects ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>كل المواد</button>
+                        {SUBJECT_OPTIONS.map(subject => (
+                          <button type="button" key={subject} disabled={editTeacherForm.allSubjects} onClick={() => toggleEditTeacherSubject(subject)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${editTeacherForm.subjects.includes(subject) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{subject}</button>
+                        ))}
+                      </div>
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف اللي بيدرّس فيها</label>
+                      <div className="flex flex-wrap gap-2">
+                        {GRADE_OPTIONS.map(grade => (
+                          <button type="button" key={grade} onClick={() => toggleEditTeacherGrade(grade)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${editTeacherForm.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{grade}</button>
+                        ))}
+                      </div>
+                   </div>
+                </div>
+
+                <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+                   <Button variant="secondary" className="flex-1" onClick={() => setEditingTeacher(null)}>إلغاء</Button>
+                   <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={isUpdatingTeacher} onClick={handleUpdateTeacher}>{isUpdatingTeacher ? 'جاري الحفظ...' : 'حفظ التعديلات'}</Button>
                 </div>
              </div>
           </div>

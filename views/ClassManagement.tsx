@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
 import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection } from '../services/supabaseData';
+import { showToast } from '../components/Toast';
 import { Button } from '../components/Button';
 import { ClassCalendar } from './ClassCalendar';
 import { 
@@ -261,7 +262,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
         setAttendanceSaved(true);
         setTimeout(() => setAttendanceSaved(false), 3000);
       } else {
-        alert('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.');
+        showToast('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.', 'error');
       }
     };
 
@@ -708,7 +709,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
         refreshClasses();
         setViewState('list');
       } else {
-        alert('حصل خطأ أثناء إنشاء الفصل. تأكد إن جدول class_sections فيه عمود capacity، وحاول تاني.');
+        showToast('حصل خطأ أثناء إنشاء الفصل. تأكد إن جدول class_sections فيه عمود capacity، وحاول تاني.', 'error');
       }
     };
 

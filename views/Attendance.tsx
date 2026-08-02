@@ -18,6 +18,7 @@ import {
   Users
 } from 'lucide-react';
 import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings, getAttendanceForDate, getTeachers } from '../services/supabaseData';
+import { showToast } from '../components/Toast';
 import { Teacher } from '../types';
 import { Student, ClassSection } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -139,20 +140,20 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const handleSaveSettings = async () => {
     const ok = await saveAttendanceSettings(attendanceMode, lateThreshold);
     if (ok) {
-      alert('تم حفظ إعدادات الحضور بنجاح.');
+      showToast('تم حفظ إعدادات الحضور بنجاح.', 'success');
     } else {
-      alert('حصل خطأ أثناء حفظ الإعدادات. تأكد إنك شغّلت كود إنشاء جدول attendance_settings في Supabase.');
+      showToast('حصل خطأ أثناء حفظ الإعدادات. تأكد إنك شغّلت كود إنشاء جدول attendance_settings في Supabase.', 'error');
     }
   };
 
   const saveAttendance = async () => {
     if (!isToday) {
-      alert('مينفعش تسجّل أو تعدّل حضور يوم فات أو يوم لسه ماجاش.');
+      showToast('مينفعش تسجّل أو تعدّل حضور يوم فات أو يوم لسه ماجاش.', 'error');
       return;
     }
     if (!selectedClass) return;
     if (attendanceMode === 'Period' && !selectedPeriodId) {
-      alert('اختار حصة الأول قبل ما تحفظ الحضور.');
+      showToast('اختار حصة الأول قبل ما تحفظ الحضور.', 'error');
       return;
     }
     setIsSavingAttendance(true);
@@ -175,7 +176,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
       setAttendanceSaved(true);
       setTimeout(() => setAttendanceSaved(false), 3000);
     } else {
-      alert('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.');
+      showToast('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.', 'error');
     }
   };
 

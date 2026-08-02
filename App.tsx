@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { UserRole, Language, User, NavItem } from './types';
 import { Header } from './components/Header';
+import { ToastContainer } from './components/Toast';
 import { Dashboard } from './views/Dashboard';
 import { LessonPlanner } from './views/LessonPlanner';
 import { LessonPlanLibrary } from './views/LessonPlanLibrary';
@@ -725,6 +726,7 @@ const App: React.FC = () => {
         </main>
       </div>
       
+      <ToastContainer />
     </div>
   );
 };

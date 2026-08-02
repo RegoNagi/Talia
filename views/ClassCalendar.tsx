@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, ChevronDown } from 'lucide-react';
 import { getPeriods, createPeriod, getTeachersBySubject, getTeachers } from '../services/supabaseData';
+import { showToast } from '../components/Toast';
 import { Teacher } from '../types';
 
 const ARABIC_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
@@ -102,14 +103,14 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
     });
     setIsSaving(false);
     if (result.conflict) {
-      alert(`في تعارض في الميعاد ده — يوم ${formDay} من ${formStartTime} لـ ${formEndTime} محجوز أصلًا لحصة "${result.conflictSubject}". اختار ميعاد تاني.`);
+      showToast(`في تعارض في الميعاد ده — يوم ${formDay} من ${formStartTime} لـ ${formEndTime} محجوز أصلًا لحصة "${result.conflictSubject}". اختار ميعاد تاني.`, 'error');
       return;
     }
     if (result.id) {
       loadPeriods();
       setIsModalOpen(false);
     } else {
-      alert('حصل خطأ أثناء حفظ الحصة. تأكد إنك شغّلت كود إنشاء جدول class_periods في Supabase.');
+      showToast('حصل خطأ أثناء حفظ الحصة. تأكد إنك شغّلت كود إنشاء جدول class_periods في Supabase.', 'error');
     }
   };
 

@@ -134,11 +134,12 @@ export async function getClassSections(): Promise<ClassSection[]> {
 // بيجيب المدرسين الحقيقيين (مع بياناتهم من جدول users)
 const ALL_SUBJECTS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
 
-export async function getTeachers(): Promise<(Teacher & { grades: string[]; subjects: string[]; teacherType: 'Main' | 'Assistant' })[]> {
+export async function getTeachers(): Promise<(Teacher & { userId: string; grades: string[]; subjects: string[]; teacherType: 'Main' | 'Assistant' })[]> {
   const { data, error } = await supabase
     .from('teachers')
     .select(`
       id,
+      user_id,
       specialization,
       employment_type,
       teacher_type,
@@ -154,6 +155,7 @@ export async function getTeachers(): Promise<(Teacher & { grades: string[]; subj
 
   return (data || []).map((row: any) => ({
     id: row.id,
+    userId: row.user_id,
     name: row.users?.name ?? 'بدون اسم',
     role: 'TEACHER' as any,
     avatar: '',
@@ -257,6 +259,74 @@ export async function createTeacher(input: {
   }
 
   return teacherRow.id;
+}
+
+// بيعدّل بيانات معلم موجود (يوزر + سجل معلم + يعيد ضبط مواده وصفوفه)
+export async function updateTeacher(input: {
+  teacherId: string;
+  userId: string;
+  name: string;
+  email: string;
+  employmentType: string;
+  subjects: string[];
+  allSubjects: boolean;
+  grades: string[];
+  teacherType: 'Main' | 'Assistant';
+}): Promise<boolean> {
+  const { error: userError } = await supabase
+    .from('users')
+    .update({ name: input.name, email: input.email?.trim() ? input.email.trim() : null })
+    .eq('id', input.userId);
+
+  if (userError) {
+    console.error('Error updating teacher user:', userError);
+    return false;
+  }
+
+  const effectiveSubjects = input.allSubjects ? ALL_SUBJECTS : input.subjects;
+  const specializationLabel = input.allSubjects ? 'كل المواد' : (effectiveSubjects.join('، ') || '');
+
+  const { error: teacherError } = await supabase
+    .from('teachers')
+    .update({
+      specialization: specializationLabel,
+      employment_type: input.employmentType,
+      teacher_type: input.teacherType,
+    })
+    .eq('id', input.teacherId);
+
+  if (teacherError) {
+    console.error('Error updating teacher record:', teacherError);
+    return false;
+  }
+
+  // بنمسح المواد والصفوف القديمة ونحط الجديدة بدل ما نحاول نعمل diff معقد
+  await supabase.from('teacher_subjects').delete().eq('teacher_id', input.teacherId);
+  await supabase.from('teacher_grades').delete().eq('teacher_id', input.teacherId);
+
+  if (effectiveSubjects.length > 0) {
+    const rows = effectiveSubjects.map(s => ({ teacher_id: input.teacherId, subject: s }));
+    const { error } = await supabase.from('teacher_subjects').insert(rows);
+    if (error) console.error('Error re-linking teacher to subjects:', error);
+  }
+
+  if (input.grades.length > 0) {
+    const rows = input.grades.map(g => ({ teacher_id: input.teacherId, grade: g }));
+    const { error } = await supabase.from('teacher_grades').insert(rows);
+    if (error) console.error('Error re-linking teacher to grades:', error);
+  }
+
+  return true;
+}
+
+// بيمسح معلم بالكامل (مسح اليوزر بيمسح معاه تلقائيًا سجل المعلم ومواده وصفوفه، لأن العلاقات معمولة بـ CASCADE)
+export async function deleteTeacher(userId: string): Promise<boolean> {
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) {
+    console.error('Error deleting teacher:', error);
+    return false;
+  }
+  return true;
 }
 
 // بيجيب سجلات الحضور المُسجّلة فعليًا في تاريخ معيّن لفصل معيّن، منظّمة حسب الحصة (أو daily لو يومي)
