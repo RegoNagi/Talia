@@ -168,8 +168,11 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
   };
 
   React.useEffect(() => {
-    loadPeriods();
-    getTeachers().then(setAllTeachers);
+    if (!sectionId) return;
+    Promise.all([getPeriods(sectionId), getTeachers()]).then(([periods, teachersData]) => {
+      setSessions(periods.map(p => ({ ...p, color: 'blue' })));
+      setAllTeachers(teachersData);
+    });
   }, [sectionId]);
 
   const days = ARABIC_DAYS;
