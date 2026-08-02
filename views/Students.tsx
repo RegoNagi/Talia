@@ -356,8 +356,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   };
 
   useEffect(() => {
-    refreshStudents();
-    refreshTeachers();
+    setStudentsLoading(true);
+    setTeachersLoading(true);
+    Promise.all([getStudents(), getTeachers()]).then(([studentsData, teachersData]) => {
+      setStudentsList(studentsData);
+      setTeachersList(teachersData);
+      setStudentsLoading(false);
+      setTeachersLoading(false);
+    });
   }, []);
 
   // Modal States

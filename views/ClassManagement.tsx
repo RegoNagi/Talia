@@ -186,17 +186,23 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
   };
 
   useEffect(() => {
-    refreshClasses();
-    getStudents().then(setRealStudents);
-    getTeachers().then(setRealTeachers);
+    setClassesLoading(true);
+    Promise.all([getClassSections(), getStudents(), getTeachers()]).then(([classesData, studentsData, teachersData]) => {
+      setClasses(classesData);
+      setRealStudents(studentsData);
+      setRealTeachers(teachersData);
+      setClassesLoading(false);
+    });
   }, []);
 
-  // بيعيد تحميل الطلاب والمعلمين والفصول أول ما تدخل شاشة إنشاء فصل أو تفاصيل فصل،
+  // بيعيد تحميل الطلاب والمعلمين أول ما تدخل شاشة إنشاء فصل أو تفاصيل فصل،
   // عشان أي طالب أو معلم اتضاف من صفحة تانية (زي إدارة المستخدمين) يظهر فورًا من غير ما تحتاج تعمل refresh للمتصفح
   useEffect(() => {
     if (viewState === 'create' || viewState === 'class-detail') {
-      getStudents().then(setRealStudents);
-      getTeachers().then(setRealTeachers);
+      Promise.all([getStudents(), getTeachers()]).then(([studentsData, teachersData]) => {
+        setRealStudents(studentsData);
+        setRealTeachers(teachersData);
+      });
     }
   }, [viewState]);
 

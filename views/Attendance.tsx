@@ -103,21 +103,23 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   React.useEffect(() => {
-    getClassSections().then(setRealClasses);
-    getStudents().then(setRealStudents);
-    getTeachers().then(setRealTeachers);
-    getAttendanceSettings().then(s => {
-      setAttendanceMode(s.mode);
-      setLateThreshold(s.lateThreshold);
+    Promise.all([getClassSections(), getStudents(), getTeachers(), getAttendanceSettings()]).then(([classesData, studentsData, teachersData, settings]) => {
+      setRealClasses(classesData);
+      setRealStudents(studentsData);
+      setRealTeachers(teachersData);
+      setAttendanceMode(settings.mode);
+      setLateThreshold(settings.lateThreshold);
       setSettingsLoaded(true);
     });
   }, []);
 
   React.useEffect(() => {
     if (activeTab === 'teacher') {
-      getClassSections().then(setRealClasses);
-      getStudents().then(setRealStudents);
-      getTeachers().then(setRealTeachers);
+      Promise.all([getClassSections(), getStudents(), getTeachers()]).then(([classesData, studentsData, teachersData]) => {
+        setRealClasses(classesData);
+        setRealStudents(studentsData);
+        setRealTeachers(teachersData);
+      });
     }
   }, [activeTab]);
 
