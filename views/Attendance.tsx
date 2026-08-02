@@ -27,9 +27,13 @@ interface AttendanceProps {
   role: UserRole;
   language: Language;
   user: User;
+  permissions?: string[];
 }
 
-export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) => {
+export const Attendance: React.FC<AttendanceProps> = ({ role, language, user, permissions = [] }) => {
+  // لو مفيش صلاحيات محددة (حسابات الديمو) نسيب كل حاجة متاحة زي ما كانت
+  const canTakeAttendance = permissions.length === 0 || permissions.includes('attendance_take');
+  const canEditSettings = permissions.length === 0 || permissions.includes('attendance_settings');
   const [activeTab, setActiveTab] = useState<'teacher' | 'admin'>('admin');
   const [adminView, setAdminView] = useState<'dashboard' | 'setup'>('setup');
   
@@ -140,6 +144,10 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   }, [selectedClass, selectedDate]);
 
   const handleSaveSettings = async () => {
+    if (!canEditSettings) {
+      showToast('معندكش صلاحية تعديل إعدادات الحضور.', 'error');
+      return;
+    }
     const ok = await saveAttendanceSettings(attendanceMode, lateThreshold);
     if (ok) {
       showToast('تم حفظ إعدادات الحضور بنجاح.', 'success');
@@ -149,6 +157,10 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   const saveAttendance = async () => {
+    if (!canTakeAttendance) {
+      showToast('معندكش صلاحية تسجيل الحضور.', 'error');
+      return;
+    }
     if (!isToday) {
       showToast('مينفعش تسجّل أو تعدّل حضور يوم فات أو يوم لسه ماجاش.', 'error');
       return;
@@ -256,7 +268,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const filteredGradeData = gradeData.filter(g => filterGrade === 'جميع الصفوف' || g.name === filterGrade);
 
   const handleStatusChange = (studentId: string, status: string) => {
-    if (!isToday) return;
+    if (!isToday || !canTakeAttendance) return;
     setAttendanceData(prev => ({
       ...prev,
       [activeKey]: { ...(prev[activeKey] || {}), [studentId]: status },
@@ -264,7 +276,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   const markAllPresent = () => {
-    if (!isToday) return;
+    if (!isToday || !canTakeAttendance) return;
     const classStudentIds = realClasses.find(c => c.id === selectedClass)?.students || [];
     const updated: Record<string, string> = { ...(attendanceData[activeKey] || {}) };
     realStudents.filter(s => classStudentIds.includes(s.id)).forEach(student => {
@@ -329,7 +341,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
               <div className="lg:col-span-2 space-y-6">
                 <div className="flex items-center justify-between bg-violet-50 border border-violet-100 rounded-2xl p-4">
                   <p className="text-sm text-violet-800 font-bold">{settingsLoaded ? 'الإعدادات محمّلة من قاعدة البيانات' : 'جاري تحميل الإعدادات...'}</p>
-                  <Button onClick={handleSaveSettings} className="bg-violet-600 hover:bg-violet-700 text-white">حفظ الإعدادات</Button>
+                  <Button onClick={handleSaveSettings} disabled={!canEditSettings} className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40">حفظ الإعدادات</Button>
                 </div>
                 {/* Frequency & Mode */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
@@ -781,10 +793,10 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                     />
                     <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                   </div>
-                  <Button onClick={markAllPresent} disabled={!isToday} className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-40">
+                  <Button onClick={markAllPresent} disabled={!isToday || !canTakeAttendance} className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-40">
                     <CheckCircle2 size={16} className="mr-2" /> تحديد الكل كحاضر
                   </Button>
-                  <Button onClick={saveAttendance} disabled={isSavingAttendance || !isToday} className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40">
+                  <Button onClick={saveAttendance} disabled={isSavingAttendance || !isToday || !canTakeAttendance} className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40">
                     {isSavingAttendance ? 'جاري الحفظ...' : attendanceSaved ? 'تم الحفظ ✓' : !isToday ? 'للعرض فقط' : 'حفظ الحضور'}
                   </Button>
                 </div>
@@ -840,7 +852,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                       <div className="flex bg-gray-50 p-1 rounded-xl">
                         <button
                           onClick={() => handleStatusChange(student.id, 'present')}
-                          disabled={!isToday}
+                          disabled={!isToday || !canTakeAttendance}
                           className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
                             status === 'present' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}
@@ -849,7 +861,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                         </button>
                         <button
                           onClick={() => handleStatusChange(student.id, 'absent')}
-                          disabled={!isToday}
+                          disabled={!isToday || !canTakeAttendance}
                           className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
                             status === 'absent' ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}
@@ -858,7 +870,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                         </button>
                         <button
                           onClick={() => handleStatusChange(student.id, 'late')}
-                          disabled={!isToday}
+                          disabled={!isToday || !canTakeAttendance}
                           className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
                             status === 'late' ? 'bg-yellow-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}

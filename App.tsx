@@ -145,8 +145,12 @@ const App: React.FC = () => {
     setUserPermissions(realUser.permissions);
     setRole('school');
     setIsLoggedIn(true);
-    setActiveView('dashboard');
-    setExpandedNav(prev => ({ ...prev, 'dashboard': true }));
+
+    // نودّيه لأول شاشة مسموح له يشوفها، بدل ما نفترض إن الرئيسية دايمًا متاحة له
+    const permCheck = (perm: string) => realUser.permissions.length === 0 || realUser.permissions.includes(perm);
+    const firstAllowedId = Object.entries(NAV_VIEW_PERMISSIONS).find(([, perm]) => permCheck(perm))?.[0] || 'dashboard';
+    setActiveView(firstAllowedId);
+    setExpandedNav(prev => ({ ...prev, [firstAllowedId]: true }));
   };
 
   const handleLogout = () => {
@@ -164,8 +168,23 @@ const App: React.FC = () => {
 
   const isRTL = language === Language.AR;
 
+  // لو مفيش صلاحيات محددة (حسابات الديمو القديمة) الوصول يفضل مفتوح زي ما كان دايمًا.
+  // غير كده، كل قسم في القائمة الجانبية بيتحكم فيه صلاحية العرض بتاعته.
+  const hasPerm = (perm: string) => userPermissions.length === 0 || userPermissions.includes(perm);
+
+  const NAV_VIEW_PERMISSIONS: Record<string, string> = {
+    dashboard: 'dashboard_view',
+    users: 'users_view',
+    curriculum: 'curriculum_view',
+    classes: 'classes_view',
+    attendance: 'attendance_view',
+    gradebook: 'grades_view',
+    finance: 'fin_view',
+    settings: 'sys_settings',
+  };
+
   // Navigation Config
-  const navItems: NavItem[] = [
+  const navItemsRaw: NavItem[] = [
     ...(role === 'MOE' ? [{ 
       id: 'moe-dashboard', 
       labelEn: 'MOE Command Center', 
@@ -224,6 +243,11 @@ const App: React.FC = () => {
     { id: 'finance', labelEn: 'Finance', labelAr: 'إدارة المدفوعات', icon: <CreditCard size={20} />, view: 'finance' },
     { id: 'settings', labelEn: 'Settings', labelAr: 'الإعدادات', icon: <SettingsIcon size={20} />, view: 'settings' },
   ];
+
+  const navItems: NavItem[] = navItemsRaw.filter(item => {
+    const requiredPerm = NAV_VIEW_PERMISSIONS[item.id];
+    return !requiredPerm || hasPerm(requiredPerm);
+  });
 
   React.useEffect(() => {
     // Automatically expand the parent section when a child view becomes active
@@ -292,9 +316,9 @@ const App: React.FC = () => {
         }} />;
       }
       case 'classes':
-        return <ClassManagement role={user.role} language={language} user={user} />;
+        return <ClassManagement role={user.role} language={language} user={user} permissions={userPermissions} />;
       case 'attendance':
-        return <Attendance role={user.role} language={language} user={user} />;
+        return <Attendance role={user.role} language={language} user={user} permissions={userPermissions} />;
       case 'lessons-planner':
         return <LessonPlanner language={language} />;
       case 'lessons-library':

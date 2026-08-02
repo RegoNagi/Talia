@@ -43,46 +43,88 @@ interface UserManagementProps {
   permissions?: string[];
 }
 
-// Mock Permission Data
+// كتالوج الصلاحيات — بيغطي كل موديول رئيسي في النظام بتفاصيله
 const PERMISSION_GROUPS = [
-   { 
-      category: 'User Management', 
+   {
+      category: 'إدارة المستخدمين (Users)',
       perms: [
-         { id: 'users_create', label: 'Create/Edit Users' },
-         { id: 'users_delete', label: 'Delete Users' },
-         { id: 'users_reset', label: 'Reset Passwords' }
+         { id: 'users_view', label: 'عرض قائمة المستخدمين' },
+         { id: 'users_create', label: 'إنشاء وتعديل المستخدمين' },
+         { id: 'users_delete', label: 'حذف المستخدمين' },
+         { id: 'users_bulk', label: 'إجراءات جماعية (حذف/استيراد جماعي)' },
+         { id: 'users_reset', label: 'إعادة تعيين كلمات المرور' },
+         { id: 'users_roles', label: 'إدارة الأدوار والصلاحيات (إنشاء/تعديل إداريين)' },
       ]
    },
-   { 
-      category: 'Academic Affairs', 
+   {
+      category: 'الحضور والغياب (Attendance)',
       perms: [
-         { id: 'aca_curriculum', label: 'Manage Curriculum' },
-         { id: 'aca_schedule', label: 'Manage Schedule' },
-         { id: 'aca_grades', label: 'Approve Grades' }
+         { id: 'attendance_view', label: 'عرض سجلات الحضور' },
+         { id: 'attendance_take', label: 'تسجيل الحضور والغياب' },
+         { id: 'attendance_edit_past', label: 'تعديل سجلات حضور سابقة' },
+         { id: 'attendance_settings', label: 'إعدادات نظام الحضور (يومي/حصص)' },
+         { id: 'attendance_reports', label: 'تقارير وتحليلات الحضور' },
       ]
    },
-   { 
-      category: 'Finance', 
+   {
+      category: 'الدرجات والتقييم (Grading)',
       perms: [
-         { id: 'fin_view', label: 'View Financials' },
-         { id: 'fin_manage', label: 'Manage Fees' }
+         { id: 'grades_view', label: 'عرض الدرجات' },
+         { id: 'grades_enter', label: 'إدخال وتعديل الدرجات' },
+         { id: 'grades_approve', label: 'اعتماد ونشر الدرجات' },
+         { id: 'grades_settings', label: 'إعداد نظام التقييم (الفئات والأوزان)' },
+         { id: 'grades_reports', label: 'تقارير الدرجات وبطاقات التقرير' },
       ]
    },
-   { 
-      category: 'System', 
+   {
+      category: 'لوحة التحكم (Dashboard)',
       perms: [
-         { id: 'sys_settings', label: 'Global Settings' },
-         { id: 'sys_logs', label: 'View Audit Logs' }
+         { id: 'dashboard_view', label: 'عرض لوحة التحكم الرئيسية' },
+         { id: 'dashboard_financial_widgets', label: 'عرض البيانات المالية في اللوحة' },
+         { id: 'dashboard_export', label: 'تصدير تقارير من اللوحة' },
+      ]
+   },
+   {
+      category: 'المنهج الدراسي (Curriculum)',
+      perms: [
+         { id: 'curriculum_view', label: 'عرض المنهج الدراسي' },
+         { id: 'curriculum_edit', label: 'تعديل وإدارة المنهج' },
+         { id: 'curriculum_library', label: 'إدارة مكتبة المحتوى والموارد' },
+         { id: 'curriculum_lesson_plans', label: 'إدارة خطط الدروس' },
+      ]
+   },
+   {
+      category: 'الفصول والجدول (Classes & Schedule)',
+      perms: [
+         { id: 'classes_view', label: 'عرض الفصول' },
+         { id: 'classes_manage', label: 'إنشاء وتعديل وحذف الفصول' },
+         { id: 'schedule_manage', label: 'إدارة الحصص والجدول الزمني' },
+      ]
+   },
+   {
+      category: 'الشؤون المالية (Finance)',
+      perms: [
+         { id: 'fin_view', label: 'عرض البيانات المالية' },
+         { id: 'fin_manage', label: 'إدارة الرسوم والمصروفات' },
+      ]
+   },
+   {
+      category: 'النظام (System)',
+      perms: [
+         { id: 'sys_settings', label: 'الإعدادات العامة' },
+         { id: 'sys_logs', label: 'عرض سجلات التدقيق' },
       ]
    }
 ];
 
+const ALL_PERMISSION_IDS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p.id));
+
 const ADMIN_TEMPLATES: Record<string, string[]> = {
-    'Super Admin': ['users_create', 'users_delete', 'users_reset', 'aca_curriculum', 'aca_schedule', 'aca_grades', 'fin_view', 'fin_manage', 'sys_settings', 'sys_logs'],
-    'Academic Manager': ['aca_curriculum', 'aca_schedule', 'aca_grades', 'users_create'],
-    'Registrar': ['users_create', 'users_reset', 'aca_schedule'],
-    'Finance Officer': ['fin_view', 'fin_manage'],
-    'IT Support': ['sys_settings', 'sys_logs', 'users_reset']
+    'Super Admin': ALL_PERMISSION_IDS,
+    'Academic Manager': ['curriculum_view', 'curriculum_edit', 'curriculum_library', 'curriculum_lesson_plans', 'classes_view', 'classes_manage', 'schedule_manage', 'grades_view', 'grades_approve', 'grades_reports', 'dashboard_view', 'users_view'],
+    'Registrar': ['users_view', 'users_create', 'users_reset', 'classes_view', 'classes_manage', 'attendance_view', 'attendance_reports', 'dashboard_view'],
+    'Finance Officer': ['fin_view', 'fin_manage', 'dashboard_view', 'dashboard_financial_widgets'],
+    'IT Support': ['sys_settings', 'sys_logs', 'users_reset', 'users_view']
 };
 
 const GRADE_OPTIONS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
@@ -1294,7 +1336,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                           <div className="flex flex-wrap gap-1">
                              {admin.permissions.slice(0, 2).map((p: string) => (
                                 <span key={p} className="text-[10px] bg-gray-100 border border-gray-200 text-gray-600 px-1.5 py-0.5 rounded">
-                                   {p.replace('_', ' ')}
+                                   {p.replace(/_/g, ' ')}
                                 </span>
                              ))}
                              {admin.permissions.length > 2 && (

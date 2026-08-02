@@ -228,9 +228,11 @@ interface ClassManagementProps {
   role: UserRole;
   language: Language;
   user: User;
+  permissions?: string[];
 }
 
-export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language, user }) => {
+export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language, user, permissions = [] }) => {
+  const canManageClasses = permissions.length === 0 || permissions.includes('classes_manage');
   // Navigation State
   const [viewState, setViewState] = useState<'list' | 'create' | 'class-detail' | 'scanner'>('list');
   const [activeClass, setActiveClass] = useState<ClassSection | null>(null);
@@ -1305,12 +1307,16 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                </div>
             </div>
             <div className="flex items-center gap-3 w-full md:w-auto">
+              {canManageClasses && (
               <Button variant="secondary" onClick={() => setIsBulkImportModalOpen(true)} className="shadow-sm border-slate-200">
                  <FileSpreadsheet size={18} className="mr-2" /> استيراد جماعي
               </Button>
+              )}
+              {canManageClasses && (
               <Button onClick={() => setViewState('create')} className="shadow-sm">
                  <Plus size={18} className="mr-2" /> تأكيد وإنشاء الفصل
               </Button>
+              )}
             </div>
          </div>
 
@@ -1421,8 +1427,8 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                        <button onClick={() => setOpenClassMenu(openClassMenu === cls.id ? null : cls.id)} className="text-gray-300 hover:text-gray-600"><MoreVertical size={20} /></button>
                        {openClassMenu === cls.id && (
                          <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-32" onMouseLeave={() => setOpenClassMenu(null)}>
-                           <button onClick={() => { setEditingClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
-                           <button onClick={() => { handleDeleteClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                           {canManageClasses && <button onClick={() => { setEditingClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>}
+                           {canManageClasses && <button onClick={() => { handleDeleteClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>}
                          </div>
                        )}
                      </div>
