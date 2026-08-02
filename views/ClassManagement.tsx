@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
-import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession } from '../services/supabaseData';
+import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection } from '../services/supabaseData';
 import { Button } from '../components/Button';
 import { ClassCalendar } from './ClassCalendar';
 import { 
@@ -208,10 +208,15 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     const [scannedStudents, setScannedStudents] = useState<string[]>([]);
     const [manualAttendance, setManualAttendance] = useState<Record<string, AttendanceStatus>>({});
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
-    const [selectedDate, setSelectedDate] = useState('Today, Apr 13');
+    const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('ar-EG', { weekday: 'long', month: 'short', day: 'numeric' }));
+    const [todayAttendance, setTodayAttendance] = useState<Record<string, 'present' | 'absent'>>({});
 
     const enrolledStudents = realStudents.filter(s => classData.students.includes(s.id));
-    
+
+    React.useEffect(() => {
+      getTodayAttendanceForSection(classData.id).then(setTodayAttendance);
+    }, [classData.id]);
+
     const sortedStudents = [...enrolledStudents].sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       if (sortBy === 'attendance') return b.attendance - a.attendance;
@@ -322,7 +327,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
       ]
     };
 
-    const presentCount = Object.values(manualAttendance).filter(s => s === 'Present').length + Object.values(manualAttendance).filter(s => s === 'Late').length;
+    const presentCount = enrolledStudents.filter(s => todayAttendance[s.id] === 'present').length;
     const absentCount = enrolledStudents.length - presentCount;
 
     return (
@@ -424,7 +429,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
          </div>
 
          {activeTab === 'calendar' ? (
-            <ClassCalendar sectionId={classData.id} />
+            <ClassCalendar sectionId={classData.id} defaultTeacherId={classData.teacherId} />
          ) : (
             <>
                {/* QR Overlay (Conditional) */}

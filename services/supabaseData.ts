@@ -126,10 +126,10 @@ export async function getTeachers(): Promise<Teacher[]> {
 }
 
 // بيجيب الحصص الحقيقية المُنشأة لفصل معيّن
-export async function getPeriods(sectionId: string): Promise<{ id: string; subject: string; day: string; startTime: string; endTime: string }[]> {
+export async function getPeriods(sectionId: string): Promise<{ id: string; subject: string; day: string; startTime: string; endTime: string; teacherId: string | null }[]> {
   const { data, error } = await supabase
     .from('class_periods')
-    .select('id, subject, day, start_time, end_time')
+    .select('id, subject, day, start_time, end_time, teacher_id')
     .eq('section_id', sectionId)
     .order('created_at', { ascending: true });
 
@@ -143,17 +143,31 @@ export async function getPeriods(sectionId: string): Promise<{ id: string; subje
     day: row.day ?? '',
     startTime: row.start_time ?? '',
     endTime: row.end_time ?? '',
+    teacherId: row.teacher_id ?? null,
   }));
 }
 
+// بيتأكد إن مفيش حصة تانية لنفس الفصل بتتعارض في نفس اليوم والوقت قبل ما ننشئ حصة جديدة
+function timesOverlap(startA: string, endA: string, startB: string, endB: string): boolean {
+  return startA < endB && startB < endA;
+}
+
 // بينشئ حصة حقيقية جديدة لفصل معيّن (من تاب "الجدول" جوه الفصل)
+// بيرجّع { id } لو نجح، أو { conflict: true, conflictSubject } لو فيه تعارض في الميعاد
 export async function createPeriod(input: {
   sectionId: string;
   subject: string;
   day: string;
   startTime: string;
   endTime: string;
-}): Promise<string | null> {
+  teacherId?: string | null;
+}): Promise<{ id: string | null; conflict?: boolean; conflictSubject?: string }> {
+  const existing = await getPeriods(input.sectionId);
+  const conflicting = existing.find(p => p.day === input.day && timesOverlap(input.startTime, input.endTime, p.startTime, p.endTime));
+  if (conflicting) {
+    return { id: null, conflict: true, conflictSubject: conflicting.subject };
+  }
+
   const { data, error } = await supabase
     .from('class_periods')
     .insert({
@@ -162,16 +176,43 @@ export async function createPeriod(input: {
       day: input.day,
       start_time: input.startTime,
       end_time: input.endTime,
+      teacher_id: input.teacherId || null,
     })
     .select('id')
     .single();
 
   if (error || !data) {
     console.error('Error creating period:', error);
-    return null;
+    return { id: null };
   }
-  return data.id;
+  return { id: data.id };
 }
+
+// بيجيب حالة حضور كل طالب في الفصل ده "النهاردة" (عبر كل الحصص) — present لو ظهر حاضر/متأخر في أي حصة النهاردة
+export async function getTodayAttendanceForSection(sectionId: string): Promise<Record<string, 'present' | 'absent'>> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('student_id, status, attendance_sessions!inner(section_id, date)')
+    .eq('attendance_sessions.section_id', sectionId)
+    .eq('attendance_sessions.date', today);
+
+  if (error || !data) {
+    console.error('Error fetching today attendance:', error);
+    return {};
+  }
+
+  const result: Record<string, 'present' | 'absent'> = {};
+  (data as any[]).forEach(row => {
+    if (row.status === 'Present' || row.status === 'Late') {
+      result[row.student_id] = 'present';
+    } else if (!result[row.student_id]) {
+      result[row.student_id] = 'absent';
+    }
+  });
+  return result;
+}
+
 
 // إعدادات تسجيل الحضور (يومي أو حسب الحصة) — صف واحد عام للمدرسة كلها
 export async function getAttendanceSettings(): Promise<{ mode: 'Daily' | 'Period'; lateThreshold: number }> {
