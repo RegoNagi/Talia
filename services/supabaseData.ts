@@ -5,6 +5,26 @@ import { Student, ClassSection, Teacher } from '../types';
 // بعض الحقول (fees, reportCards, transcript, attendance, performance) لسه
 // مش لها جداول في قاعدة البيانات، فبنحطلها قيم افتراضية فارغة مؤقتًا
 // لحد ما نبني موديول الحضور والدرجات والمصروفات.
+// بيحسب نسبة الحضور الحقيقية لكل طالب من سجلات الحضور الفعلية
+async function getAttendancePercentages(): Promise<Record<string, number>> {
+  const { data, error } = await supabase.from('attendance_records').select('student_id, status');
+  if (error || !data) {
+    console.error('Error computing attendance percentages:', error);
+    return {};
+  }
+  const totals: Record<string, { total: number; present: number }> = {};
+  data.forEach((row: any) => {
+    if (!totals[row.student_id]) totals[row.student_id] = { total: 0, present: 0 };
+    totals[row.student_id].total += 1;
+    if (row.status === 'Present' || row.status === 'Late') totals[row.student_id].present += 1;
+  });
+  const result: Record<string, number> = {};
+  Object.entries(totals).forEach(([studentId, t]) => {
+    result[studentId] = t.total > 0 ? Math.round((t.present / t.total) * 100) : 0;
+  });
+  return result;
+}
+
 export async function getStudents(): Promise<Student[]> {
   const { data, error } = await supabase
     .from('students')
@@ -23,11 +43,13 @@ export async function getStudents(): Promise<Student[]> {
     return [];
   }
 
+  const attendanceMap = await getAttendancePercentages();
+
   return (data || []).map((row: any) => ({
     id: row.id,
     name: row.users?.name ?? 'بدون اسم',
     grade: row.grade ?? '',
-    attendance: 0,
+    attendance: attendanceMap[row.id] ?? 0,
     performance: 0,
     status: row.status ?? 'Active',
     fees: [],
