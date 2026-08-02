@@ -6,6 +6,8 @@ import { Teacher } from '../types';
 
 const ARABIC_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
 const WEEK_DAY_MAP = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+const SUBJECTS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
+const TIMES = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
 const todayArabicDay = () => WEEK_DAY_MAP[new Date().getDay()];
 
 // عنصر اختيار موحّد بثيم النظام (بنفسجي، حواف دائرية) لكن مبني على select عادي عشان يفضل موثوق 100%
@@ -23,46 +25,29 @@ const ThemedSelect = ({ value, onChange, options, disabled }: { value: string; o
   </div>
 );
 
-export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: string; defaultTeacherId?: string }) => {
-  const [view, setView] = useState<'Day' | 'Week' | 'Month'>('Week');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
-
-  // Form State
-  const [formSubject, setFormSubject] = useState('رياضيات');
-  const [formDay, setFormDay] = useState(ARABIC_DAYS[0]);
-  const [formStartTime, setFormStartTime] = useState('09:00');
-  const [formEndTime, setFormEndTime] = useState('09:45');
+// المودال ده معمول كـ component مستقل بحالته الخاصة، عشان الكتابة أو الاختيار جواه
+// ميعملش إعادة رسم للجدول اللي وراه كله (وده اللي كان بيسبب اهتزاز الخلفية).
+const AddPeriodModal: React.FC<{
+  sectionId: string;
+  defaultTeacherId?: string;
+  initialDay: string;
+  initialStartTime: string;
+  initialEndTime: string;
+  onClose: () => void;
+  onSaved: () => void;
+}> = ({ sectionId, defaultTeacherId, initialDay, initialStartTime, initialEndTime, onClose, onSaved }) => {
+  const [formSubject, setFormSubject] = useState(SUBJECTS[0]);
+  const [formDay, setFormDay] = useState(initialDay);
+  const [formStartTime, setFormStartTime] = useState(initialStartTime);
+  const [formEndTime, setFormEndTime] = useState(initialEndTime);
   const [formTeacherId, setFormTeacherId] = useState(defaultTeacherId || '');
-
   const [realTeachers, setRealTeachers] = useState<Teacher[]>([]);
-  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
-
-  // الحصص الحقيقية بتاعة الفصل ده — بتتحمّل من قاعدة البيانات
-  const [sessions, setSessions] = useState<{ id: string; subject: string; day: string; startTime: string; endTime: string; teacherId: string | null; color: string }[]>([]);
-
-  const loadPeriods = () => {
-    if (!sectionId) return;
-    getPeriods(sectionId).then(periods => {
-      setSessions(periods.map(p => ({ ...p, color: 'blue' })));
-    });
-  };
-
-  React.useEffect(() => {
-    loadPeriods();
-    getTeachers().then(setAllTeachers);
-  }, [sectionId]);
-
-  React.useEffect(() => {
-    setFormTeacherId(defaultTeacherId || '');
-  }, [defaultTeacherId]);
+  const [isSaving, setIsSaving] = useState(false);
 
   React.useEffect(() => {
     if (!formSubject) { setRealTeachers([]); return; }
     getTeachersBySubject(formSubject).then(teachers => {
       setRealTeachers(teachers);
-      // لو المعلم الأساسي بتاع الفصل بيدرّس المادة دي، يكون هو الافتراضي — غير كده أول معلم متاح للمادة دي
       if (defaultTeacherId && teachers.some(t => t.id === defaultTeacherId)) {
         setFormTeacherId(defaultTeacherId);
       } else {
@@ -70,26 +55,6 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
       }
     });
   }, [formSubject]);
-
-  const days = ARABIC_DAYS;
-  const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
-  const subjects = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
-
-  const colorMap: Record<string, string> = {
-    blue: 'bg-violet-100 border-l-4 border-violet-600 text-violet-800',
-  };
-
-  const teacherName = (id: string | null) => allTeachers.find(t => t.id === id)?.name;
-
-  const openAddModal = (day: string, time?: string) => {
-    setFormDay(day);
-    setFormStartTime(time || '09:00');
-    if (time) {
-      const nextTimeIndex = times.indexOf(time) + 1;
-      setFormEndTime(nextTimeIndex < times.length ? times[nextTimeIndex] : '15:00');
-    }
-    setIsModalOpen(true);
-  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -107,11 +72,123 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
       return;
     }
     if (result.id) {
-      loadPeriods();
-      setIsModalOpen(false);
+      onSaved();
+      onClose();
     } else {
       showToast('حصل خطأ أثناء حفظ الحصة. تأكد إنك شغّلت كود إنشاء جدول class_periods في Supabase.', 'error');
     }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
+        <h3 className="text-xl font-bold text-slate-900 mb-6">إضافة حصة جديدة</h3>
+
+        <div className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">المادة</label>
+            <ThemedSelect value={formSubject} onChange={setFormSubject} options={SUBJECTS.map(s => ({ value: s, label: s }))} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">المعلم</label>
+            <ThemedSelect
+              value={formTeacherId}
+              onChange={setFormTeacherId}
+              options={[{ value: '', label: 'بدون معلم محدد' }, ...realTeachers.map(t => ({ value: t.id, label: t.name }))]}
+            />
+            {realTeachers.length === 0 ? (
+              <p className="text-xs text-amber-600 mt-1">مفيش معلمين مسجّلين على مادة "{formSubject}" لسه في قاعدة البيانات.</p>
+            ) : defaultTeacherId && formTeacherId === defaultTeacherId ? (
+              <p className="text-xs text-slate-400 mt-1">المعلم الأساسي المعيّن على الفصل ده — تقدر تغيّره لو الحصة دي لمعلم بديل.</p>
+            ) : null}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">اليوم</label>
+            <ThemedSelect value={formDay} onChange={setFormDay} options={ARABIC_DAYS.map(d => ({ value: d, label: d }))} />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1.5">الوقت</label>
+            <div className="flex items-center gap-3">
+              <input
+                type="time"
+                value={formStartTime}
+                onChange={e => setFormStartTime(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-violet-500"
+              />
+              <span className="text-slate-400 font-medium">-</span>
+              <input
+                type="time"
+                value={formEndTime}
+                onChange={e => setFormEndTime(e.target.value)}
+                className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-violet-500"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          >
+            إلغاء
+          </button>
+          <button
+            disabled={isSaving || !formSubject}
+            onClick={handleSave}
+            className="px-4 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
+          >
+            {isSaving ? 'جاري الحفظ...' : 'حفظ الحصة'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: string; defaultTeacherId?: string }) => {
+  const [view, setView] = useState<'Day' | 'Week' | 'Month'>('Week');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalDefaults, setModalDefaults] = useState({ day: ARABIC_DAYS[0], startTime: '09:00', endTime: '09:45' });
+  const [monthCursor, setMonthCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
+
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
+
+  // الحصص الحقيقية بتاعة الفصل ده — بتتحمّل من قاعدة البيانات
+  const [sessions, setSessions] = useState<{ id: string; subject: string; day: string; startTime: string; endTime: string; teacherId: string | null; color: string }[]>([]);
+
+  const loadPeriods = () => {
+    if (!sectionId) return;
+    getPeriods(sectionId).then(periods => {
+      setSessions(periods.map(p => ({ ...p, color: 'blue' })));
+    });
+  };
+
+  React.useEffect(() => {
+    loadPeriods();
+    getTeachers().then(setAllTeachers);
+  }, [sectionId]);
+
+  const days = ARABIC_DAYS;
+  const times = TIMES;
+
+  const colorMap: Record<string, string> = {
+    blue: 'bg-violet-100 border-l-4 border-violet-600 text-violet-800',
+  };
+
+  const teacherName = (id: string | null) => allTeachers.find(t => t.id === id)?.name;
+
+  const openAddModal = (day: string, time?: string) => {
+    let endTime = '09:45';
+    if (time) {
+      const nextTimeIndex = times.indexOf(time) + 1;
+      endTime = nextTimeIndex < times.length ? times[nextTimeIndex] : '15:00';
+    }
+    setModalDefaults({ day, startTime: time || '09:00', endTime });
+    setIsModalOpen(true);
   };
 
   const renderWeekOrDay = () => {
@@ -245,72 +322,15 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
       {view === 'Month' ? renderMonth() : renderWeekOrDay()}
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
-            <h3 className="text-xl font-bold text-slate-900 mb-6">إضافة حصة جديدة</h3>
-
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">المادة</label>
-                <ThemedSelect value={formSubject} onChange={setFormSubject} options={subjects.map(s => ({ value: s, label: s }))} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">المعلم</label>
-                <ThemedSelect
-                  value={formTeacherId}
-                  onChange={setFormTeacherId}
-                  options={[{ value: '', label: 'بدون معلم محدد' }, ...realTeachers.map(t => ({ value: t.id, label: t.name }))]}
-                />
-                {realTeachers.length === 0 ? (
-                  <p className="text-xs text-amber-600 mt-1">مفيش معلمين مسجّلين على مادة "{formSubject}" لسه في قاعدة البيانات.</p>
-                ) : defaultTeacherId && formTeacherId === defaultTeacherId ? (
-                  <p className="text-xs text-slate-400 mt-1">المعلم الأساسي المعيّن على الفصل ده — تقدر تغيّره لو الحصة دي لمعلم بديل.</p>
-                ) : null}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">اليوم</label>
-                <ThemedSelect value={formDay} onChange={setFormDay} options={ARABIC_DAYS.map(d => ({ value: d, label: d }))} />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1.5">الوقت</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="time"
-                    value={formStartTime}
-                    onChange={e => setFormStartTime(e.target.value)}
-                    className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-violet-500"
-                  />
-                  <span className="text-slate-400 font-medium">-</span>
-                  <input
-                    type="time"
-                    value={formEndTime}
-                    onChange={e => setFormEndTime(e.target.value)}
-                    className="flex-1 bg-slate-50 border border-slate-200 text-slate-900 text-sm rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-violet-500"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                إلغاء
-              </button>
-              <button
-                disabled={isSaving || !formSubject}
-                onClick={handleSave}
-                className="px-4 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
-              >
-                {isSaving ? 'جاري الحفظ...' : 'حفظ الحصة'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <AddPeriodModal
+          sectionId={sectionId}
+          defaultTeacherId={defaultTeacherId}
+          initialDay={modalDefaults.day}
+          initialStartTime={modalDefaults.startTime}
+          initialEndTime={modalDefaults.endTime}
+          onClose={() => setIsModalOpen(false)}
+          onSaved={loadPeriods}
+        />
       )}
     </div>
   );
