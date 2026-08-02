@@ -14,9 +14,11 @@ import {
   Plus,
   Trash2,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
-import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings, getAttendanceForDate } from '../services/supabaseData';
+import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings, getAttendanceForDate, getTeachers } from '../services/supabaseData';
+import { Teacher } from '../types';
 import { Student, ClassSection } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -65,6 +67,8 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   // Teacher State
+  const [selectedTeacherId, setSelectedTeacherId] = useState<string | null>(null);
+  const [realTeachers, setRealTeachers] = useState<Teacher[]>([]);
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
   // attendanceData بقى منظم حسب الحصة، عشان تسجيل حصة معينة ميأثرش على حصة تانية
@@ -100,12 +104,21 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   React.useEffect(() => {
     getClassSections().then(setRealClasses);
     getStudents().then(setRealStudents);
+    getTeachers().then(setRealTeachers);
     getAttendanceSettings().then(s => {
       setAttendanceMode(s.mode);
       setLateThreshold(s.lateThreshold);
       setSettingsLoaded(true);
     });
   }, []);
+
+  React.useEffect(() => {
+    if (activeTab === 'teacher') {
+      getClassSections().then(setRealClasses);
+      getStudents().then(setRealStudents);
+      getTeachers().then(setRealTeachers);
+    }
+  }, [activeTab]);
 
   React.useEffect(() => {
     if (selectedClass && attendanceMode === 'Period') {
@@ -666,8 +679,41 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
 
       {activeTab === 'teacher' && (
         <div className="space-y-6">
-          {!selectedClass ? (
+          {!selectedTeacherId ? (
             <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center max-w-lg mx-auto mt-10">
+              <div className="w-16 h-16 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <Users size={32} />
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">أنت مين؟</h2>
+              <p className="text-gray-500 mb-6">اختار اسمك عشان نعرضلك بس الفصول المعيّن عليها.</p>
+
+              <div className="space-y-3">
+                {realTeachers.map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setSelectedTeacherId(t.id)}
+                    className="w-full flex items-center justify-between p-4 rounded-xl border border-gray-200 hover:border-violet-500 hover:bg-violet-50 transition-all text-right"
+                  >
+                    <div>
+                      <p className="font-bold text-gray-900">{t.name}</p>
+                      <p className="text-xs text-gray-500">{t.specialization}</p>
+                    </div>
+                    <ChevronDown size={20} className="text-gray-400 -rotate-90" />
+                  </button>
+                ))}
+                {realTeachers.length === 0 && (
+                  <p className="text-sm text-gray-400">مفيش معلمين مسجّلين لسه في قاعدة البيانات.</p>
+                )}
+              </div>
+            </div>
+          ) : !selectedClass ? (
+            <div className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm text-center max-w-lg mx-auto mt-10">
+              <div className="flex items-center justify-between mb-4">
+                <button onClick={() => setSelectedTeacherId(null)} className="text-sm text-violet-600 font-bold hover:underline">
+                  تغيير المعلم
+                </button>
+                <span className="text-sm text-gray-500">{realTeachers.find(t => t.id === selectedTeacherId)?.name}</span>
+              </div>
               <div className="w-16 h-16 bg-violet-50 text-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
                 <Calendar size={32} />
               </div>
@@ -675,7 +721,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
               <p className="text-gray-500 mb-6">اختر فصلاً لبدء تسجيل حضور اليوم.</p>
               
               <div className="space-y-3">
-                {realClasses.slice(0, 3).map(cls => (
+                {realClasses.filter(cls => cls.teacherId === selectedTeacherId).map(cls => (
                   <button
                     key={cls.id}
                     onClick={() => setSelectedClass(cls.id)}
@@ -688,6 +734,9 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                     <ChevronDown size={20} className="text-gray-400 -rotate-90" />
                   </button>
                 ))}
+                {realClasses.filter(cls => cls.teacherId === selectedTeacherId).length === 0 && (
+                  <p className="text-sm text-gray-400">المعلم ده مش معيّن كمعلم رئيسي على أي فصل لسه.</p>
+                )}
               </div>
             </div>
           ) : (
