@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Clock, ChevronDown, BookOpen } from 'lucide-react';
+import { getPeriods, createPeriod } from '../services/supabaseData';
 
 // Custom Select Component to avoid native selects
 const CustomSelect = ({ value, options, onChange, icon: Icon }: { value: string, options: string[], onChange: (val: string) => void, icon?: any }) => {
@@ -33,23 +34,30 @@ const CustomSelect = ({ value, options, onChange, icon: Icon }: { value: string,
   );
 };
 
-export const ClassCalendar = () => {
+export const ClassCalendar = ({ sectionId }: { sectionId: string }) => {
   const [view, setView] = useState<'Day' | 'Week' | 'Month'>('Week');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<{ day: string, time: string } | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Form State
   const [formSubject, setFormSubject] = useState('Mathematics');
   const [formStartTime, setFormStartTime] = useState('09:00 AM');
   const [formEndTime, setFormEndTime] = useState('10:00 AM');
 
-  // Mock sessions
-  const [sessions, setSessions] = useState([
-    { id: 1, subject: 'Mathematics', day: 'Mon 12', startTime: '09:00 AM', endTime: '10:00 AM', color: 'blue' },
-    { id: 2, subject: 'Science', day: 'Tue 13', startTime: '10:00 AM', endTime: '11:00 AM', color: 'emerald' },
-    { id: 3, subject: 'Arabic', day: 'Wed 14', startTime: '11:00 AM', endTime: '12:00 PM', color: 'amber' },
-    { id: 4, subject: 'English', day: 'Thu 15', startTime: '08:00 AM', endTime: '09:00 AM', color: 'indigo' },
-  ]);
+  // الحصص الحقيقية بتاعة الفصل ده — بتتحمّل من قاعدة البيانات
+  const [sessions, setSessions] = useState<{ id: string; subject: string; day: string; startTime: string; endTime: string; color: string }[]>([]);
+
+  const loadPeriods = () => {
+    if (!sectionId) return;
+    getPeriods(sectionId).then(periods => {
+      setSessions(periods.map(p => ({ ...p, color: 'blue' })));
+    });
+  };
+
+  React.useEffect(() => {
+    loadPeriods();
+  }, [sectionId]);
 
   const days = ['Sun 11', 'Mon 12', 'Tue 13', 'Wed 14', 'Thu 15'];
   const times = ['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '12:00 PM', '01:00 PM', '02:00 PM'];
@@ -272,10 +280,28 @@ export const ClassCalendar = () => {
                 Cancel
               </button>
               <button 
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors shadow-sm"
+                disabled={isSaving}
+                onClick={async () => {
+                  setIsSaving(true);
+                  const day = selectedSlot ? selectedSlot.day : days[0];
+                  const id = await createPeriod({
+                    sectionId,
+                    subject: formSubject,
+                    day,
+                    startTime: formStartTime,
+                    endTime: formEndTime,
+                  });
+                  setIsSaving(false);
+                  if (id) {
+                    loadPeriods();
+                    setIsModalOpen(false);
+                  } else {
+                    alert('حصل خطأ أثناء حفظ الحصة. تأكد إنك شغّلت كود إنشاء جدول class_periods في Supabase.');
+                  }
+                }}
+                className="px-4 py-2 text-sm font-medium bg-violet-600 hover:bg-violet-700 text-white rounded-lg transition-colors shadow-sm disabled:opacity-50"
               >
-                Save Session
+                {isSaving ? 'جاري الحفظ...' : 'Save Session'}
               </button>
             </div>
           </div>

@@ -16,7 +16,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { getStudents, getClassSections, saveAttendanceSession } from '../services/supabaseData';
+import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings } from '../services/supabaseData';
 import { Student, ClassSection } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -67,32 +67,67 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   // Teacher State
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
-  const [attendanceData, setAttendanceData] = useState<Record<string, string>>({});
+  // attendanceData بقى منظم حسب الحصة، عشان تسجيل حصة معينة ميأثرش على حصة تانية
+  const [attendanceData, setAttendanceData] = useState<Record<string, Record<string, string>>>({});
   const [realClasses, setRealClasses] = useState<ClassSection[]>([]);
   const [realStudents, setRealStudents] = useState<Student[]>([]);
-  const periods = ['الحصة 1: رياضيات', 'الحصة 2: فيزياء', 'الحصة 3: إنجليزي'];
-  const [selectedPeriod, setSelectedPeriod] = useState(periods[0]);
+  const [realPeriods, setRealPeriods] = useState<{ id: string; subject: string; day: string; startTime: string; endTime: string }[]>([]);
+  const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [isSavingAttendance, setIsSavingAttendance] = useState(false);
   const [attendanceSaved, setAttendanceSaved] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  // مفتاح "الحصة الحالية" اللي بيتم تسجيل الحضور تحته — في وضع "يومي" مفيش حصص، فبنستخدم مفتاح ثابت
+  const activeKey = attendanceMode === 'Daily' ? 'daily' : (selectedPeriodId || '');
+  const currentAttendance = attendanceData[activeKey] || {};
 
   React.useEffect(() => {
     getClassSections().then(setRealClasses);
     getStudents().then(setRealStudents);
+    getAttendanceSettings().then(s => {
+      setAttendanceMode(s.mode);
+      setLateThreshold(s.lateThreshold);
+      setSettingsLoaded(true);
+    });
   }, []);
+
+  React.useEffect(() => {
+    if (selectedClass && attendanceMode === 'Period') {
+      getPeriods(selectedClass).then(p => {
+        setRealPeriods(p);
+        setSelectedPeriodId(p.length > 0 ? p[0].id : null);
+      });
+    }
+  }, [selectedClass, attendanceMode]);
+
+  const handleSaveSettings = async () => {
+    const ok = await saveAttendanceSettings(attendanceMode, lateThreshold);
+    if (ok) {
+      alert('تم حفظ إعدادات الحضور بنجاح.');
+    } else {
+      alert('حصل خطأ أثناء حفظ الإعدادات. تأكد إنك شغّلت كود إنشاء جدول attendance_settings في Supabase.');
+    }
+  };
 
   const saveAttendance = async () => {
     if (!selectedClass) return;
+    if (attendanceMode === 'Period' && !selectedPeriodId) {
+      alert('اختار حصة الأول قبل ما تحفظ الحضور.');
+      return;
+    }
     setIsSavingAttendance(true);
     const classStudents = realStudents.filter(s => realClasses.find(c => c.id === selectedClass)?.students.includes(s.id));
     const statusMap: Record<string, string> = { present: 'Present', absent: 'Absent', late: 'Late', excused: 'Excused' };
     const records = classStudents.map(s => ({
       studentId: s.id,
-      status: statusMap[attendanceData[s.id]] || 'Absent',
+      status: statusMap[currentAttendance[s.id]] || 'Absent',
     }));
+    const periodSubject = attendanceMode === 'Period' ? realPeriods.find(p => p.id === selectedPeriodId)?.subject : 'يوم كامل';
     const sessionId = await saveAttendanceSession({
       sectionId: selectedClass,
       date: new Date().toISOString().slice(0, 10),
-      subject: selectedPeriod,
+      subject: periodSubject,
+      periodId: attendanceMode === 'Period' ? selectedPeriodId : null,
       records,
     });
     setIsSavingAttendance(false);
@@ -178,16 +213,19 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const filteredGradeData = gradeData.filter(g => filterGrade === 'جميع الصفوف' || g.name === filterGrade);
 
   const handleStatusChange = (studentId: string, status: string) => {
-    setAttendanceData(prev => ({ ...prev, [studentId]: status }));
+    setAttendanceData(prev => ({
+      ...prev,
+      [activeKey]: { ...(prev[activeKey] || {}), [studentId]: status },
+    }));
   };
 
   const markAllPresent = () => {
-    const newAttendance: Record<string, string> = { ...attendanceData };
     const classStudentIds = realClasses.find(c => c.id === selectedClass)?.students || [];
+    const updated: Record<string, string> = { ...(attendanceData[activeKey] || {}) };
     realStudents.filter(s => classStudentIds.includes(s.id)).forEach(student => {
-      newAttendance[student.id] = 'present';
+      updated[student.id] = 'present';
     });
-    setAttendanceData(newAttendance);
+    setAttendanceData(prev => ({ ...prev, [activeKey]: updated }));
   };
 
   return (
@@ -244,6 +282,10 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
           {adminView === 'setup' ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
+                <div className="flex items-center justify-between bg-violet-50 border border-violet-100 rounded-2xl p-4">
+                  <p className="text-sm text-violet-800 font-bold">{settingsLoaded ? 'الإعدادات محمّلة من قاعدة البيانات' : 'جاري تحميل الإعدادات...'}</p>
+                  <Button onClick={handleSaveSettings} className="bg-violet-600 hover:bg-violet-700 text-white">حفظ الإعدادات</Button>
+                </div>
                 {/* Frequency & Mode */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                   <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
@@ -631,7 +673,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                   </button>
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">{realClasses.find(c => c.id === selectedClass)?.name}</h2>
-                    <p className="text-slate-500">تسجيل الحضور لـ{selectedPeriod} • {new Date().toLocaleDateString('ar-EG')}</p>
+                    <p className="text-slate-500">تسجيل الحضور {attendanceMode === 'Period' ? `لـ${realPeriods.find(p => p.id === selectedPeriodId)?.subject || 'حصة'}` : '(يومي)'} • {new Date().toLocaleDateString('ar-EG')}</p>
                   </div>
                 </div>
                 
@@ -655,25 +697,31 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                 </div>
               </div>
 
-              {/* Period Selector Bar */}
-              <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                 {periods.map(p => (
-                   <button
-                     key={p}
-                     onClick={() => setSelectedPeriod(p)}
-                     className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all ${
-                       selectedPeriod === p ? 'bg-violet-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-                     }`}
-                   >
-                     {p}
-                   </button>
-                 ))}
-                 <button disabled className="whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed">الحصة 4: استراحة</button>
-              </div>
+              {/* Period Selector Bar (وضع "حسب الحصة" فقط) — الحصص دي بتتنشئ من تاب "الجدول الزمني" جوه الفصل */}
+              {attendanceMode === 'Period' && (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                     {realPeriods.map(p => (
+                       <button
+                         key={p.id}
+                         onClick={() => setSelectedPeriodId(p.id)}
+                         className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all ${
+                           selectedPeriodId === p.id ? 'bg-violet-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                         }`}
+                       >
+                         {p.subject}{p.startTime ? ` • ${p.startTime}` : ''}
+                       </button>
+                     ))}
+                  </div>
+                  {realPeriods.length === 0 && (
+                    <p className="text-sm text-gray-400">مفيش حصص للفصل ده لسه — روح لتاب "الجدول الزمني" جوه صفحة الفصل عشان تضيف الحصص أولًا.</p>
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {realStudents.filter(s => (realClasses.find(c => c.id === selectedClass)?.students || []).includes(s.id) && s.name.toLowerCase().includes(studentSearch.toLowerCase())).map(student => {
-                  const status = attendanceData[student.id];
+                  const status = currentAttendance[student.id];
                   
                   return (
                     <div key={student.id} className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
