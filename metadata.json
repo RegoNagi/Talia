@@ -1,0 +1,7 @@
+{
+  "name": "Talia360 EGY v8",
+  "description": "A comprehensive, AI-powered School Operating System designed for K-12 administration, lesson planning, and student analytics with Arabic-first support.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

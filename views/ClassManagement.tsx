@@ -1,0 +1,1445 @@
+import React, { useState, useEffect } from 'react';
+import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem } from '../types';
+import { CLASSES, STUDENTS, MOCK_ATTENDANCE_SESSION, MOCK_TEACHERS } from '../services/mockData';
+import { Button } from '../components/Button';
+import { ClassCalendar } from './ClassCalendar';
+import { 
+  Users, 
+  Plus, 
+  Settings, 
+  Calendar, 
+  MapPin, 
+  QrCode, 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  MoreVertical,
+  BookOpen,
+  Scan,
+  Smartphone,
+  WifiOff,
+  History,
+  AlertTriangle,
+  RotateCw,
+  UserPlus,
+  Eye,
+  EyeOff,
+  SlidersHorizontal,
+  ChevronDown,
+  FileText,
+  Save,
+  ArrowRight,
+  List,
+  Upload,
+  Download,
+  Info,
+  X,
+  FileSpreadsheet,
+  PlusCircle,
+  Calculator,
+  Atom,
+  Globe,
+  ChevronRight,
+  ChevronLeft,
+  Search,
+  Briefcase
+} from 'lucide-react';
+
+const ACADEMIC_PLAN = [
+  {
+    id: 'math',
+    subject: 'Mathematics',
+    icon: Calculator,
+    topics: [
+      { title: 'Introduction to Quadratic Equations', obj: 'Understand ax² + bx + c = 0 form.', status: 'Completed' },
+      { title: 'Factoring Trinomials (Today\'s Focus)', obj: 'Practice factoring common trinomials.', status: 'In Progress' },
+      { title: 'The Quadratic Formula (Tomorrow)', obj: 'Apply the formula to find roots.', status: 'Upcoming' },
+    ]
+  },
+  {
+    id: 'physics',
+    subject: 'Physics',
+    icon: Atom,
+    topics: [
+      { title: 'Newton\'s First Law', obj: 'Understand inertia and equilibrium.', status: 'Completed' },
+      { title: 'Newton\'s Second Law', obj: 'F = ma applications.', status: 'In Progress' },
+      { title: 'Newton\'s Third Law', obj: 'Action and reaction pairs.', status: 'Upcoming' },
+    ]
+  },
+  {
+    id: 'english',
+    subject: 'English Literature',
+    icon: BookOpen,
+    topics: [
+      { title: 'Macbeth: Act 1 Analysis', obj: 'Character introduction and themes.', status: 'Completed' },
+      { title: 'Macbeth: Act 2 Scene 1', obj: 'The dagger soliloquy.', status: 'In Progress' },
+    ]
+  }
+];
+
+const AcademicPlanAccordion = () => {
+  const [expandedSubject, setExpandedSubject] = useState<string | null>('math');
+
+  const toggleSubject = (id: string) => {
+    setExpandedSubject(prev => prev === id ? null : id);
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Completed':
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">Completed</span>;
+      case 'In Progress':
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700">In Progress</span>;
+      default:
+        return <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">Upcoming</span>;
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 flex-1 overflow-y-auto">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-1">
+          <h3 className="font-bold text-slate-900 text-lg">الخطة الأكاديمية للأسبوع</h3>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-violet-50 text-violet-700 border border-violet-100">Week 33</span>
+        </div>
+        <p className="text-sm text-slate-500 font-medium">Apr 12 - Apr 18</p>
+      </div>
+
+      <div className="space-y-2">
+        {ACADEMIC_PLAN.map((subject) => {
+          const isExpanded = expandedSubject === subject.id;
+          const Icon = subject.icon;
+
+          return (
+            <div key={subject.id} className="border border-slate-100 rounded-2xl overflow-hidden bg-white">
+              <button 
+                onClick={() => toggleSubject(subject.id)}
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-slate-50 rounded-xl text-slate-600">
+                    <Icon size={18} />
+                  </div>
+                  <span className="font-bold text-slate-800">{subject.subject}</span>
+                </div>
+                <ChevronDown 
+                  size={18} 
+                  className={`text-slate-400 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} 
+                />
+              </button>
+
+              {isExpanded && (
+                <div className="px-4 pb-4 pt-2 border-t border-slate-50 bg-slate-50/30">
+                  <div className="space-y-0">
+                    {subject.topics.map((topic, idx) => {
+                      const isLast = idx === subject.topics.length - 1;
+                      const isUpcoming = topic.status === 'Upcoming';
+                      
+                      return (
+                        <div key={idx} className={`pl-6 relative ${isLast ? 'border-l-[1.5px] border-transparent' : isUpcoming ? 'border-l-[1.5px] border-dashed border-slate-300' : 'border-l-[1.5px] border-solid border-slate-200'} pb-5 last:pb-1`}>
+                          <div className={`absolute -left-[4.5px] top-1.5 w-2 h-2 rounded-full ring-4 ring-slate-50 ${topic.status === 'Completed' ? 'bg-green-400' : topic.status === 'In Progress' ? 'bg-violet-400' : 'bg-slate-300'}`}></div>
+                          <div className="flex justify-between items-start gap-4 mb-1">
+                            <h4 className="text-sm font-bold text-slate-800 leading-tight">{topic.title}</h4>
+                            {getStatusBadge(topic.status)}
+                          </div>
+                          <p className="text-xs text-slate-500">Obj: {topic.obj}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+interface ClassManagementProps {
+  role: UserRole;
+  language: Language;
+  user: User;
+}
+
+export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language, user }) => {
+  // Navigation State
+  const [viewState, setViewState] = useState<'list' | 'create' | 'class-detail' | 'scanner'>('list');
+  const [activeClass, setActiveClass] = useState<ClassSection | null>(null);
+  const [classes, setClasses] = useState<ClassSection[]>(CLASSES);
+  const [sortBy, setSortBy] = useState<'name' | 'attendance'>('name');
+  const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Update activeClass when classes state changes
+  useEffect(() => {
+    if (activeClass) {
+      const updated = classes.find(c => c.id === activeClass.id);
+      if (updated) setActiveClass(updated);
+    }
+  }, [classes]);
+
+  // --- Shared Components ---
+
+  const ClassDetail = ({ role, classData }: { role: UserRole, classData: ClassSection }) => {
+    const [activeTab, setActiveTab] = useState<'overview' | 'calendar'>('overview');
+    const [qrActive, setQrActive] = useState(false);
+    const [qrCode, setQrCode] = useState('INIT_TOKEN');
+    const [timer, setTimer] = useState(7);
+    const [scannedStudents, setScannedStudents] = useState<string[]>([]);
+    const [manualAttendance, setManualAttendance] = useState<Record<string, AttendanceStatus>>({});
+    const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+    const [selectedDate, setSelectedDate] = useState('Today, Apr 13');
+
+    const enrolledStudents = STUDENTS.filter(s => classData.students.includes(s.id));
+    
+    const sortedStudents = [...enrolledStudents].sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'attendance') return b.attendance - a.attendance;
+      return 0;
+    });
+
+    const markAllPresent = () => {
+       const updates: Record<string, AttendanceStatus> = {};
+       enrolledStudents.forEach(s => {
+          updates[s.id] = 'Present';
+       });
+       setManualAttendance(updates);
+       setScannedStudents(enrolledStudents.map(s => s.id));
+    };
+
+    const toggleStatus = (studentId: string) => {
+       const current = manualAttendance[studentId] || 'Absent';
+       const states: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
+       const next = states[(states.indexOf(current) + 1) % states.length];
+       setManualAttendance(prev => ({ ...prev, [studentId]: next }));
+       if (next === 'Present' || next === 'Late') {
+         if (!scannedStudents.includes(studentId)) setScannedStudents(prev => [...prev, studentId]);
+       } else {
+         setScannedStudents(prev => prev.filter(id => id !== studentId));
+       }
+    };
+
+    const removeStudent = (studentId: string) => {
+      if (confirm('Are you sure you want to remove this student from the roster?')) {
+        setClasses(prev => prev.map(c => 
+          c.id === classData.id 
+            ? { ...c, students: c.students.filter(id => id !== studentId) } 
+            : c
+        ));
+      }
+    };
+
+    const addStudent = (studentId: string) => {
+      setClasses(prev => prev.map(c => 
+        c.id === classData.id 
+          ? { ...c, students: [...c.students, studentId] } 
+          : c
+      ));
+      setIsAddStudentModalOpen(false);
+    };
+
+    useEffect(() => {
+      if (qrActive) {
+        const interval = setInterval(() => {
+           setTimer((prev) => {
+             if (prev <= 1) {
+                setQrCode(`TOKEN_${Date.now()}`); 
+                return 7;
+             }
+             return prev - 1;
+           });
+        }, 1000);
+        return () => clearInterval(interval);
+      }
+    }, [qrActive]);
+
+    useEffect(() => {
+       if (qrActive) {
+          const randomScan = setInterval(() => {
+             const available = enrolledStudents.filter(s => !scannedStudents.includes(s.id));
+             if (available.length > 0 && Math.random() > 0.6) {
+                const luckyStudent = available[0];
+                setScannedStudents(prev => [...prev, luckyStudent.id]);
+                setManualAttendance(prev => ({...prev, [luckyStudent.id]: 'Present'}));
+             }
+          }, 2000);
+          return () => clearInterval(randomScan);
+       }
+    }, [qrActive, scannedStudents, enrolledStudents]);
+
+    const todaysLesson = {
+      title: 'Quadratic Equations',
+      objectives: ['Understand standard form', 'Solve by factoring', 'Identify coefficients'],
+      materials: ['Graphing Calculator', 'Workbook Pg 45'],
+      outline: [
+         { duration: '10 min', activity: 'Introduction', description: 'Review of linear equations vs quadratic.' },
+         { duration: '20 min', activity: 'Core Concept', description: 'Standard form ax^2 + bx + c = 0 explanation.' },
+         { duration: '15 min', activity: 'Practice', description: 'Solving simple examples on whiteboard.' }
+      ]
+    };
+
+    const presentCount = Object.values(manualAttendance).filter(s => s === 'Present').length + Object.values(manualAttendance).filter(s => s === 'Late').length;
+    const absentCount = enrolledStudents.length - presentCount;
+
+    return (
+      <div className="flex flex-col h-[calc(100vh-140px)] animate-fadeIn gap-6">
+         {/* Header */}
+         <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+               <button onClick={() => setViewState('list')} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <ArrowRight size={24} className="text-gray-600" />
+               </button>
+               <div>
+                  <h2 className="text-2xl font-bold text-gray-900">{classData.name}</h2>
+                  <p className="text-sm text-gray-500">{classData.gradeLevel} • Room {classData.room}</p>
+               </div>
+            </div>
+            
+            <div className="flex items-center gap-6">
+               <div className="flex bg-slate-100 p-1 rounded-lg">
+                  <button 
+                    onClick={() => setActiveTab('overview')}
+                    className={`px-4 py-1.5 text-sm rounded-md transition-all ${activeTab === 'overview' ? 'bg-white text-slate-800 font-semibold shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    نظرة عامة
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('calendar')}
+                    className={`px-4 py-1.5 text-sm rounded-md transition-all ${activeTab === 'calendar' ? 'bg-white text-slate-800 font-semibold shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+                  >
+                    الجدول الزمني
+                  </button>
+               </div>
+
+               <div className="hidden md:flex items-center gap-4">
+                  <div className="relative">
+                     <button 
+                        onClick={() => setIsDatePickerOpen(!isDatePickerOpen)}
+                        className="flex items-center gap-2 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 transition-colors"
+                     >
+                        <Calendar size={16} className="text-slate-400" />
+                        <span className="text-sm font-bold text-slate-700">{selectedDate}</span>
+                        <ChevronDown size={16} className="text-slate-400" />
+                     </button>
+
+                     {isDatePickerOpen && (
+                        <div className="absolute top-full left-0 mt-2 z-50 w-64 bg-white border border-slate-200 rounded-xl shadow-xl p-4">
+                           <div className="flex items-center justify-between mb-4">
+                              <button className="p-1 hover:bg-slate-100 rounded-md text-slate-500"><ChevronLeft size={16} /></button>
+                              <span className="text-sm font-bold text-slate-800">April 2026</span>
+                              <button className="p-1 hover:bg-slate-100 rounded-md text-slate-500"><ChevronRight size={16} /></button>
+                           </div>
+                           <div className="grid grid-cols-7 gap-1 mb-2">
+                              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                                 <div key={day} className="text-center text-[10px] font-bold text-slate-400">{day}</div>
+                              ))}
+                           </div>
+                           <div className="grid grid-cols-7 gap-1">
+                              {Array.from({ length: 30 }).map((_, i) => {
+                                 const date = i + 1;
+                                 const isCurrent = date === 13;
+                                 return (
+                                    <button
+                                       key={date}
+                                       onClick={() => {
+                                          setSelectedDate(`Apr ${date}`);
+                                          setIsDatePickerOpen(false);
+                                       }}
+                                       className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${isCurrent ? 'bg-violet-600 text-white shadow-sm' : 'text-slate-700 hover:bg-slate-100'}`}
+                                    >
+                                       {date}
+                                    </button>
+                                 );
+                              })}
+                           </div>
+                        </div>
+                     )}
+                  </div>
+
+                  <div className="flex items-center gap-4 bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm">
+                     <div className="text-sm"><span className="text-slate-500">إجمالي الطلاب:</span> <span className="font-bold text-slate-900">{enrolledStudents.length}</span></div>
+                     <div className="w-px h-4 bg-slate-200"></div>
+                     <div className="text-sm"><span className="text-slate-500">حاضر:</span> <span className="font-bold text-green-600">{presentCount}</span></div>
+                     <div className="w-px h-4 bg-slate-200"></div>
+                     <div className="text-sm"><span className="text-slate-500">غائب:</span> <span className="font-bold text-red-600">{absentCount}</span></div>
+                  </div>
+               </div>
+               <div className="flex gap-3">
+                  {role === UserRole.ADMIN && (
+                    <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-md hover:shadow-lg gap-2" onClick={() => setIsAddStudentModalOpen(true)}>
+                       <UserPlus size={18} /> إضافة طالب
+                    </Button>
+                  )}
+                  {role === UserRole.TEACHER && (
+                    <Button variant={qrActive ? "danger" : undefined} className={!qrActive ? "bg-violet-600 text-white hover:bg-violet-700 shadow-md hover:shadow-lg" : ""} onClick={() => setQrActive(!qrActive)}>
+                       <QrCode size={18} /> {qrActive ? 'إيقاف جلسة QR' : 'بدء جلسة QR'}
+                    </Button>
+                  )}
+               </div>
+            </div>
+         </div>
+
+         {activeTab === 'calendar' ? (
+            <ClassCalendar />
+         ) : (
+            <>
+               {/* QR Overlay (Conditional) */}
+               {qrActive && role === UserRole.TEACHER && (
+                  <div className="bg-gray-900 text-white p-6 rounded-3xl flex items-center justify-between relative overflow-hidden shadow-2xl">
+                     <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-gray-800 to-gray-900 z-0"></div>
+                     <div className="relative z-10 flex items-center gap-8">
+                        <div className="bg-white p-2 rounded-2xl">
+                           <QrCode size={120} className="text-black" />
+                        </div>
+                        <div>
+                           <h3 className="text-2xl font-bold mb-1">Scan to Check-In</h3>
+                           <p className="text-gray-400 text-sm mb-4">Token refreshes in {timer}s</p>
+                           <div className="flex items-center gap-2 text-xs bg-white/10 px-3 py-1 rounded-full w-fit">
+                              <MapPin size={12} /> Geo-fencing Active
+                           </div>
+                        </div>
+                     </div>
+                     <div className="relative z-10 text-right">
+                        <p className="text-4xl font-bold font-mono">{presentCount}/{enrolledStudents.length}</p>
+                        <p className="text-gray-400 text-sm uppercase font-bold">حاضر</p>
+                     </div>
+                  </div>
+               )}
+
+               <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 overflow-hidden">
+                  {/* Left Col: Roster & Attendance */}
+                  <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm flex flex-col overflow-hidden">
+               <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                  <div className="flex items-center gap-4">
+                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                       <Users size={18} /> قائمة الطلاب
+                    </h3>
+                    <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-2 py-1">
+                       <SlidersHorizontal size={14} className="text-gray-400" />
+                       <span className="text-xs text-gray-500">فرز حسب:</span>
+                       <select 
+                         value={sortBy} 
+                         onChange={(e) => setSortBy(e.target.value as any)}
+                         className="text-xs font-bold text-gray-900 outline-none bg-transparent"
+                       >
+                          <option value="name">Name</option>
+                          <option value="attendance">الحضور</option>
+                       </select>
+                    </div>
+                  </div>
+                  {role === UserRole.TEACHER && (
+                    <Button variant="secondary" className="text-xs h-8" onClick={markAllPresent}>
+                       <CheckCircle2 size={14} /> تسجيل الكل حاضر
+                    </Button>
+                  )}
+               </div>
+               <div className="flex-1 overflow-y-auto p-2">
+                  <table className="w-full text-left border-collapse">
+                     <thead className="bg-white text-xs text-gray-500 uppercase sticky top-0 z-10">
+                        <tr>
+                           <th className="p-3 border-b border-gray-100">الطالب</th>
+                           <th className="p-3 border-b border-gray-100">{role === UserRole.TEACHER ? 'الحالة' : 'الحضور'}</th>
+                           <th className="p-3 border-b border-gray-100 text-right">إجراء</th>
+                        </tr>
+                     </thead>
+                     <tbody className="text-sm">
+                        {sortedStudents.map(student => {
+                           const status = manualAttendance[student.id];
+                           return (
+                              <tr key={student.id} className="hover:bg-gray-50 transition-colors group border-b border-gray-50 last:border-0">
+                                 <td className="p-3">
+                                    <div className="flex items-center gap-3">
+                                       <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center font-bold text-xs text-gray-600">
+                                          {student.name.charAt(0)}
+                                       </div>
+                                       <div>
+                                          <div className="flex items-center gap-2">
+                                             <p className="font-bold text-gray-900">{student.name}</p>
+                                             {parseInt(student.id.replace(/\D/g, '')) % 5 === 0 && (
+                                                <div className="group relative flex items-center justify-center">
+                                                   <PlusCircle size={14} className="text-red-500" />
+                                                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20">
+                                                      Medical Condition: Asthma
+                                                   </div>
+                                                </div>
+                                             )}
+                                             {parseInt(student.id.replace(/\D/g, '')) % 7 === 0 && (
+                                                <div className="group relative flex items-center justify-center">
+                                                   <AlertTriangle size={14} className="text-violet-600" />
+                                                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block bg-gray-900 text-white text-[10px] px-2 py-1 rounded whitespace-nowrap z-20">
+                                                      Behavior Alert: Talkative
+                                                   </div>
+                                                </div>
+                                             )}
+                                          </div>
+                                          <p className="text-[10px] text-gray-400">{student.id}</p>
+                                       </div>
+                                    </div>
+                                 </td>
+                                 <td className="p-3">
+                                    {role === UserRole.TEACHER ? (
+                                      <div className="flex items-center gap-1 bg-gray-50 p-1 rounded-lg w-fit border border-gray-100">
+                                         <button 
+                                            onClick={() => setManualAttendance(prev => ({...prev, [student.id]: 'Present'}))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${status === 'Present' ? 'bg-green-100 text-green-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                                         >
+                                            حاضر
+                                         </button>
+                                         <button 
+                                            onClick={() => setManualAttendance(prev => ({...prev, [student.id]: 'Absent'}))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${status === 'Absent' || !status ? 'bg-red-100 text-red-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                                         >
+                                            غائب
+                                         </button>
+                                         <button 
+                                            onClick={() => setManualAttendance(prev => ({...prev, [student.id]: 'Late'}))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${status === 'Late' ? 'bg-yellow-100 text-yellow-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                                         >
+                                            متأخر
+                                         </button>
+                                         <button 
+                                            onClick={() => setManualAttendance(prev => ({...prev, [student.id]: 'Excused'}))}
+                                            className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${status === 'Excused' ? 'bg-gray-200 text-gray-700 shadow-sm' : 'text-gray-500 hover:bg-gray-200'}`}
+                                         >
+                                            عذر
+                                         </button>
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-2">
+                                         <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden max-w-[60px]">
+                                            <div className="h-full bg-violet-600" style={{ width: `${student.attendance}%` }}></div>
+                                         </div>
+                                         <span className="font-bold text-gray-700">{student.attendance}%</span>
+                                      </div>
+                                    )}
+                                 </td>
+                                 <td className="p-3 text-right">
+                                    {role === UserRole.ADMIN ? (
+                                      <button 
+                                        onClick={() => removeStudent(student.id)}
+                                        className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                        title="Remove from roster"
+                                      >
+                                         <XCircle size={18} />
+                                      </button>
+                                    ) : (
+                                      <button className="text-gray-400 hover:text-violet-600 p-2 rounded-full hover:bg-violet-50">
+                                         <MoreVertical size={16} />
+                                      </button>
+                                    )}
+                                 </td>
+                              </tr>
+                           );
+                        })}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+
+            {/* Right Col: Class Info & Lesson Plan */}
+            <div className="space-y-6 flex flex-col">
+               <AcademicPlanAccordion />
+               <div className="bg-violet-50 rounded-3xl p-6 border border-violet-100">
+                  <h4 className="font-bold text-violet-900 mb-2">أداء الفصل</h4>
+                  <div className="flex justify-between items-end">
+                     <div>
+                        <p className="text-3xl font-bold text-violet-700">92%</p>
+                        <p className="text-xs text-violet-600">معدل الحضور</p>
+                     </div>
+                     <div className="h-8 w-px bg-violet-200"></div>
+                     <div>
+                        <p className="text-3xl font-bold text-violet-700">A-</p>
+                        <p className="text-xs text-violet-600">درجة سلوك الفصل</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+         </div>
+            </>
+         )}
+
+         {/* إضافة طالب Modal */}
+         {isAddStudentModalOpen && (
+           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
+               <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                 <h3 className="text-xl font-bold text-gray-900">إضافة طالب للقائمة</h3>
+                 <button onClick={() => setIsAddStudentModalOpen(false)} className="text-gray-400 hover:text-gray-600">
+                   <X size={20} />
+                 </button>
+               </div>
+               <div className="p-6 space-y-4">
+                 <div className="relative">
+                   <input 
+                     type="text" 
+                     placeholder="Search students by name or ID..." 
+                     className="w-full p-3 pl-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
+                     value={searchQuery}
+                     onChange={(e) => setSearchQuery(e.target.value)}
+                   />
+                   <Users className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                 </div>
+                 <div className="max-h-60 overflow-y-auto space-y-2">
+                   {STUDENTS.filter(s => 
+                     !classData.students.includes(s.id) && 
+                     (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                   ).map(student => (
+                     <div key={student.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all">
+                       <div className="flex items-center gap-3">
+                         <div className="w-8 h-8 rounded-full bg-violet-50 text-violet-600 flex items-center justify-center font-bold text-xs">
+                           {student.name.charAt(0)}
+                         </div>
+                         <div>
+                           <p className="font-bold text-gray-900 text-sm">{student.name}</p>
+                           <p className="text-[10px] text-gray-500">{student.id} • {student.grade}</p>
+                         </div>
+                       </div>
+                       <Button variant="secondary" className="text-xs h-8 px-3" onClick={() => addStudent(student.id)}>
+                         Add
+                       </Button>
+                     </div>
+                   ))}
+                 </div>
+               </div>
+               <div className="p-6 bg-gray-50 border-t border-gray-100">
+                 <Button variant="secondary" className="w-full" onClick={() => setIsAddStudentModalOpen(false)}>إغلاق</Button>
+               </div>
+             </div>
+           </div>
+         )}
+      </div>
+    );
+  };
+
+  // --- Components based on Persona ---
+
+  // 1. ADMIN: Class Wizard & List
+  const AdminView = () => {
+    const [step, setStep] = useState(1);
+    const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
+    
+    // Form State
+    const [classData, setClassData] = useState({
+      name: '',
+      grade: 'Grade 10',
+      capacity: 25,
+      teachers: {} as Record<string, string>,
+      students: [] as string[],
+    });
+
+    const [activeSubjectForTeacher, setActiveSubjectForTeacher] = useState<string | null>(null);
+    const [teacherSearchQuery, setTeacherSearchQuery] = useState('');
+    const [studentSearchQuery, setStudentSearchQuery] = useState('');
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [selectedGrade, setSelectedGrade] = useState('All Grades');
+
+    const toggleStudent = (studentId: string) => {
+      setClassData(prev => {
+        const isSelected = prev.students.includes(studentId);
+        if (isSelected) {
+          return { ...prev, students: prev.students.filter(id => id !== studentId) };
+        } else {
+          return { ...prev, students: [...prev.students, studentId] };
+        }
+      });
+    };
+
+    const selectAllStudents = (filteredStudents: string[]) => {
+      setClassData(prev => {
+        const newStudents = new Set([...prev.students, ...filteredStudents]);
+        return { ...prev, students: Array.from(newStudents) };
+      });
+    };
+    
+    const deselectAllStudents = (filteredStudents: string[]) => {
+      setClassData(prev => {
+        return { ...prev, students: prev.students.filter(id => !filteredStudents.includes(id)) };
+      });
+    };
+
+    if (viewState === 'class-detail' && activeClass) {
+      return <ClassDetail role={role} classData={activeClass} />;
+    }
+
+    if (viewState === 'create') {
+      const filteredStudents = STUDENTS.filter(s => 
+        s.grade === classData.grade &&
+        (s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
+         s.id.toLowerCase().includes(studentSearchQuery.toLowerCase()))
+      );
+      
+      const isOverCapacity = classData.students.length > classData.capacity;
+
+      return (
+        <div className="max-w-5xl mx-auto animate-fadeIn pb-10">
+          <div className="mb-8 flex items-center justify-between">
+            <div>
+              <h2 className="text-3xl font-bold text-gray-900">إنشاء فصل جديد</h2>
+              <p className="text-gray-500">Define class details, assign teachers, and enroll students.</p>
+            </div>
+            <Button variant="secondary" onClick={() => setViewState('list')}>إلغاء</Button>
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* Stepper */}
+            <div className="bg-gray-50 p-6 border-b border-gray-100 flex items-center flex-row justify-between overflow-x-auto" dir="rtl">
+               {[1, 2, 3, 4].map(s => (
+                 <div key={s} className={`flex items-center gap-2 ${s <= step ? 'text-violet-600' : 'text-gray-400'} flex-shrink-0`}>
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all ${s === step ? 'bg-violet-600 text-white' : s < step ? 'bg-violet-100 text-violet-600' : 'bg-gray-200'}`}>
+                       {s < step ? <CheckCircle2 size={16} /> : s}
+                    </div>
+                    <span className="text-sm font-medium hidden md:block">
+                      {s === 1 ? 'التفاصيل 1' : s === 2 ? 'المعلمون 2' : s === 3 ? 'الطلاب 3' : 'المراجعة 4'}
+                    </span>
+                 </div>
+               ))}
+            </div>
+
+            <div className="p-8 min-h-[400px]">
+               {step === 1 && (
+                 <div className="space-y-6 max-w-lg mx-auto">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">تفاصيل الفصل</h3>
+                    <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-2">اسم الفصل</label>
+                       <input 
+                          type="text" 
+                          placeholder="e.g. 10-A" 
+                          className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
+                          value={classData.name}
+                          onChange={e => setClassData({...classData, name: e.target.value})}
+                       />
+                    </div>
+                    <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+                       <select 
+                          className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" 
+                          value={classData.grade} 
+                          onChange={e => setClassData({...classData, grade: e.target.value, students: []})}
+                       >
+                          {['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(g => <option key={g}>{g}</option>)}
+                       </select>
+                    </div>
+                    <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-2">السعة الاستيعابية</label>
+                       <input 
+                          type="number" 
+                          placeholder="e.g. 25" 
+                          className="w-full p-3 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
+                          value={classData.capacity}
+                          onChange={e => setClassData({...classData, capacity: parseInt(e.target.value) || 0})}
+                       />
+                    </div>
+                 </div>
+               )}
+
+               {step === 2 && (
+                 <div className="space-y-6 max-w-4xl mx-auto">
+                    {!activeSubjectForTeacher ? (
+                      <>
+                        {/* Class Management Section */}
+                        <div className="mb-4">
+                          <h4 className="text-lg font-bold text-gray-900 mb-4">إدارة الفصل</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {/* Main Teacher Card */}
+                            <div className="p-4 border border-slate-100 rounded-xl flex items-center justify-between bg-white shadow-none">
+                              <div>
+                                <p className="font-bold text-gray-900">معلم رئيسي</p>
+                                <p className="text-xs text-slate-500">Required • Homeroom</p>
+                              </div>
+                              {classData.teachers['MainTeacher'] ? (
+                                (() => {
+                                  const t = MOCK_TEACHERS.find(x => x.id === classData.teachers['MainTeacher']);
+                                  if (!t) return null;
+                                  return (
+                                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                      <img src={t.avatar} alt={t.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover" />
+                                      <span className="text-sm font-medium text-slate-900">{t.name}</span>
+                                      <button 
+                                        onClick={() => {
+                                          const newTeachers = { ...classData.teachers };
+                                          delete newTeachers['MainTeacher'];
+                                          setClassData({ ...classData, teachers: newTeachers });
+                                        }}
+                                        className="text-slate-400 hover:text-red-500 transition-colors ml-2"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <Button 
+                                  variant="secondary" 
+                                  className="text-xs py-1.5 h-8 shadow-none"
+                                  onClick={() => setActiveSubjectForTeacher('MainTeacher')}
+                                >
+                                  Assign Teacher
+                                </Button>
+                              )}
+                            </div>
+
+                            {/* Assistant Teacher Card */}
+                            <div className="p-4 border border-slate-100 rounded-xl flex items-center justify-between bg-white shadow-none">
+                              <div>
+                                <p className="font-bold text-gray-900">معلم مساعد</p>
+                                <p className="text-xs text-slate-500">Optional • Co-Teacher</p>
+                              </div>
+                              {classData.teachers['AssistantTeacher'] ? (
+                                (() => {
+                                  const t = MOCK_TEACHERS.find(x => x.id === classData.teachers['AssistantTeacher']);
+                                  if (!t) return null;
+                                  return (
+                                    <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                      <img src={t.avatar} alt={t.name} referrerPolicy="no-referrer" className="w-8 h-8 rounded-full object-cover" />
+                                      <span className="text-sm font-medium text-slate-900">{t.name}</span>
+                                      <button 
+                                        onClick={() => {
+                                          const newTeachers = { ...classData.teachers };
+                                          delete newTeachers['AssistantTeacher'];
+                                          setClassData({ ...classData, teachers: newTeachers });
+                                        }}
+                                        className="text-slate-400 hover:text-red-500 transition-colors ml-2"
+                                      >
+                                        <X size={16} />
+                                      </button>
+                                    </div>
+                                  );
+                                })()
+                              ) : (
+                                <Button 
+                                  variant="secondary" 
+                                  className="text-xs py-1.5 h-8 shadow-none"
+                                  onClick={() => setActiveSubjectForTeacher('AssistantTeacher')}
+                                >
+                                  Assign Teacher
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                      </>
+                    ) : (
+                      <div className="animate-fadeIn">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                          <div className="flex items-center gap-3">
+                            <button 
+                              onClick={() => setActiveSubjectForTeacher(null)}
+                              className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                            >
+                              <ArrowRight size={20} className="text-gray-600" />
+                            </button>
+                            <div>
+                              <h3 className="text-xl font-bold text-gray-900">تعيين معلم {activeSubjectForTeacher}</h3>
+                              <p className="text-sm text-gray-500">اختر معلماً لهذه المادة.</p>
+                            </div>
+                          </div>
+                          <div className={`px-4 py-2 rounded-xl font-bold text-sm ${classData.teachers[activeSubjectForTeacher] ? 'bg-violet-50 text-violet-600 border border-violet-200' : 'bg-gray-50 text-gray-600 border border-gray-200'}`}>
+                            Selected: {classData.teachers[activeSubjectForTeacher] ? '1' : '0'} / 1 (Required)
+                          </div>
+                        </div>
+
+                        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col h-[400px]">
+                          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+                            <div className="relative flex-1">
+                              <input 
+                                type="text" 
+                                placeholder="Search teachers by name or ID..." 
+                                className="w-full p-2.5 pl-10 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                                value={teacherSearchQuery}
+                                onChange={(e) => setTeacherSearchQuery(e.target.value)}
+                              />
+                              <Users className="absolute left-3 top-3 text-gray-400" size={16} />
+                            </div>
+                          </div>
+                          
+                          <div className="overflow-y-auto flex-1 p-2">
+                            {(() => {
+                              const filteredTeachers = MOCK_TEACHERS.filter(t => 
+                                (t.specialization.includes(activeSubjectForTeacher!) || ['English', 'Arabic', 'MainTeacher', 'AssistantTeacher'].includes(activeSubjectForTeacher!)) &&
+                                (t.name.toLowerCase().includes(teacherSearchQuery.toLowerCase()) || 
+                                 t.id.toLowerCase().includes(teacherSearchQuery.toLowerCase()))
+                              );
+
+                              if (filteredTeachers.length === 0) {
+                                return (
+                                  <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                                    <Users size={32} className="mb-2 opacity-50" />
+                                    <p>No teachers found for {activeSubjectForTeacher}</p>
+                                  </div>
+                                );
+                              }
+
+                              return (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {filteredTeachers.map(teacher => {
+                                    const isSelected = classData.teachers[activeSubjectForTeacher] === teacher.id;
+                                    const isConflict = (teacher.academicLoad || 0) > 20;
+
+                                    return (
+                                      <div 
+                                        key={teacher.id} 
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            const newTeachers = { ...classData.teachers };
+                                            delete newTeachers[activeSubjectForTeacher];
+                                            setClassData({ ...classData, teachers: newTeachers });
+                                          } else {
+                                            setClassData({
+                                              ...classData,
+                                              teachers: { ...classData.teachers, [activeSubjectForTeacher]: teacher.id }
+                                            });
+                                          }
+                                        }}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-violet-50 border-violet-200 ring-1 ring-violet-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                      >
+                                        <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 bg-white'}`}>
+                                          {isSelected && <CheckCircle2 size={14} />}
+                                        </div>
+                                        <img src={teacher.avatar || `https://ui-avatars.com/api/?name=${teacher.name}&background=random`} alt={teacher.name} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover" />
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center justify-between">
+                                            <p className="text-sm font-bold text-gray-900 truncate">{teacher.name}</p>
+                                            {isConflict && (
+                                              <span className="text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">Schedule Conflict</span>
+                                            )}
+                                          </div>
+                                          <p className="text-[10px] text-gray-500">{teacher.academicLoad || 0}/24 Sessions • Assigned to: {(teacher.assignedClasses || []).join(', ') || 'None'}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                 </div>
+               )}
+
+               {step === 3 && (
+                 <div className="space-y-6 max-w-4xl mx-auto">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-4">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">تسجيل الطلاب</h3>
+                        <p className="text-sm text-gray-500">Select students from {classData.grade} to add to this class.</p>
+                      </div>
+                      <div className={`px-4 py-2 rounded-xl font-bold text-sm ${isOverCapacity ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-violet-50 text-violet-600 border border-violet-200'}`}>
+                        Selected: {classData.students.length} / {classData.capacity} (السعة الاستيعابية)
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col h-[400px]">
+                      <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+                        <div className="relative flex-1">
+                          <input 
+                            type="text" 
+                            placeholder="Search students by name or ID..." 
+                            className="w-full p-2.5 pl-10 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                            value={studentSearchQuery}
+                            onChange={(e) => setStudentSearchQuery(e.target.value)}
+                          />
+                          <Users className="absolute left-3 top-3 text-gray-400" size={16} />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="secondary" 
+                            className="text-xs py-2"
+                            onClick={() => selectAllStudents(filteredStudents.map(s => s.id))}
+                          >
+                            Select All
+                          </Button>
+                          <Button 
+                            variant="secondary" 
+                            className="text-xs py-2"
+                            onClick={() => deselectAllStudents(filteredStudents.map(s => s.id))}
+                          >
+                            Clear
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      <div className="overflow-y-auto flex-1 p-2">
+                        {filteredStudents.length === 0 ? (
+                          <div className="h-full flex flex-col items-center justify-center text-gray-400">
+                            <Users size={32} className="mb-2 opacity-50" />
+                            <p>No students found in {classData.grade}</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            {filteredStudents.map(student => {
+                              const isSelected = classData.students.includes(student.id);
+                              return (
+                                <div 
+                                  key={student.id} 
+                                  onClick={() => toggleStudent(student.id)}
+                                  className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${isSelected ? 'bg-violet-50 border-violet-200 ring-1 ring-violet-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}
+                                >
+                                  <div className={`w-5 h-5 rounded border flex items-center justify-center flex-shrink-0 ${isSelected ? 'bg-violet-600 border-violet-600 text-white' : 'border-gray-300 bg-white'}`}>
+                                    {isSelected && <CheckCircle2 size={14} />}
+                                  </div>
+                                  <img src={student.avatar || `https://ui-avatars.com/api/?name=${student.name}&background=random`} alt={student.name} referrerPolicy="no-referrer" className="w-10 h-10 rounded-full object-cover" />
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold text-gray-900 truncate">{student.name}</p>
+                                    <p className="text-[10px] text-gray-500">{student.id}</p>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                 </div>
+               )}
+
+               {step === 4 && (
+                 <div className="text-center py-10">
+                    <div className="w-20 h-20 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                       <CheckCircle2 size={40} />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900 mb-2">جاهز للإنشاء</h3>
+                    <div className="bg-gray-50 p-6 rounded-2xl max-w-md mx-auto mb-8 text-left space-y-3">
+                       <div className="flex justify-between text-sm"><span className="text-gray-500">اسم الفصل</span><span className="font-bold">{classData.name || 'Unnamed Class'}</span></div>
+                       <div className="flex justify-between text-sm"><span className="text-gray-500">الصف الدراسي</span><span className="font-bold">{classData.grade}</span></div>
+                       <div className="flex justify-between text-sm"><span className="text-gray-500">السعة الاستيعابية</span><span className="font-bold">{classData.capacity}</span></div>
+                       <div className="flex justify-between text-sm"><span className="text-gray-500">المعلمون المعينون</span><span className="font-bold">{Object.keys(classData.teachers).length}</span></div>
+                       <div className="flex justify-between text-sm"><span className="text-gray-500">الطلاب المسجلين</span><span className="font-bold">{classData.students.length}</span></div>
+                    </div>
+                    <Button onClick={() => setViewState('list')} className="w-full max-w-xs mx-auto text-lg py-3 bg-violet-600 hover:bg-violet-700">
+                       تأكيد وإنشاء الفصل
+                    </Button>
+                 </div>
+               )}
+            </div>
+            
+            <div className="p-6 border-t border-gray-100 bg-gray-50 flex justify-between">
+               <Button variant="ghost" disabled={step === 1} onClick={() => setStep(s => s - 1)}>رجوع</Button>
+               {step < 4 && (
+                 <Button 
+                   onClick={() => setStep(s => s + 1)} 
+                   disabled={step === 3 && classData.students.length > classData.capacity}
+                   className="bg-violet-600 hover:bg-violet-700"
+                 >
+                   الخطوة التالية <ArrowRight size={16} />
+                 </Button>
+               )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (viewState === 'class-detail' && activeClass) {
+      return <ClassDetail role={role} classData={activeClass} />;
+    }
+
+    return (
+      <div className="animate-fadeIn space-y-8">
+         <div className="flex justify-between items-center">
+            <div>
+               <h2 className="text-3xl font-bold text-gray-900">دليل الفصول</h2>
+               <p className="text-gray-500">إدارة الفصول، التسجيل، وتعيينات طاقم العمل.</p>
+            </div>
+         </div>
+
+         {/* Control Bar */}
+         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex items-center gap-4 w-full md:w-auto">
+               <div className="relative">
+                  <input 
+                     type="text" 
+                     placeholder="البحث عن فصول أو قاعات..." 
+                     className="w-72 bg-white border border-slate-200 rounded-lg px-4 py-2 pl-10 text-sm outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
+                  />
+                  <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
+               </div>
+               <div className="relative">
+                  <button 
+                     onClick={() => setIsFilterOpen(!isFilterOpen)}
+                     className="flex items-center justify-between w-40 bg-white border border-slate-200 rounded-lg px-4 py-2 text-sm text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                  >
+                     <span>{selectedGrade}</span>
+                     <ChevronDown size={16} className="text-slate-400" />
+                  </button>
+                  {isFilterOpen && (
+                     <div className="absolute top-full right-0 mt-2 z-50 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1">
+                        {['All Grades', 'Grade 10', 'Grade 11', 'Grade 12'].map((grade) => (
+                           <div
+                              key={grade}
+                              onClick={() => {
+                                 setSelectedGrade(grade);
+                                 setIsFilterOpen(false);
+                              }}
+                              className="px-4 py-2 hover:bg-slate-50 cursor-pointer text-sm text-slate-700 transition-colors"
+                           >
+                              {grade}
+                           </div>
+                        ))}
+                     </div>
+                  )}
+               </div>
+            </div>
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <Button variant="secondary" onClick={() => setIsBulkImportModalOpen(true)} className="shadow-sm border-slate-200">
+                 <FileSpreadsheet size={18} className="mr-2" /> استيراد جماعي
+              </Button>
+              <Button onClick={() => setViewState('create')} className="shadow-sm">
+                 <Plus size={18} className="mr-2" /> تأكيد وإنشاء الفصل
+              </Button>
+            </div>
+         </div>
+
+         {/* استيراد جماعي Modal */}
+         {isBulkImportModalOpen && (
+           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+             <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100">
+               <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                 <div className="flex items-center gap-3">
+                   <div className="w-12 h-12 bg-violet-100 text-violet-600 rounded-2xl flex items-center justify-center">
+                     <FileSpreadsheet size={24} />
+                   </div>
+                   <div>
+                     <h3 className="text-2xl font-bold text-gray-900">استيراد جماعي Classes</h3>
+                     <p className="text-sm text-gray-500">قم برفع ملف CSV لإنشاء فصول متعددة دفعة واحدة.</p>
+                   </div>
+                 </div>
+                 <button onClick={() => setIsBulkImportModalOpen(false)} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-400 transition-colors">
+                   <X size={20} />
+                 </button>
+               </div>
+
+               <div className="p-8 space-y-8">
+                 {/* التعليمات */}
+                 <div className="bg-violet-50 border border-violet-100 rounded-2xl p-5 flex gap-4">
+                   <div className="w-10 h-10 bg-violet-100 text-violet-600 rounded-xl flex-shrink-0 flex items-center justify-center">
+                     <Info size={20} />
+                   </div>
+                   <div className="space-y-2">
+                     <h4 className="font-bold text-violet-900 text-sm">التعليمات</h4>
+                     <ul className="text-xs text-violet-700 space-y-1 list-disc ml-4">
+                       <li>تأكد من أن ملف CSV الخاص بك يتبع هيكل النموذج بدقة.</li>
+                       <li>Required columns: <strong>Name, Grade, Room, Curriculum, Year</strong>.</li>
+                       <li>Curriculum must be one of: <strong>National, American, IG</strong>.</li>
+                       <li>Maximum 100 rows per upload.</li>
+                     </ul>
+                   </div>
+                 </div>
+
+                 {/* Template Download */}
+                 <div className="flex items-center justify-between p-6 border border-gray-100 rounded-3xl bg-gray-50/50">
+                   <div className="flex items-center gap-4">
+                     <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-green-600">
+                       <FileSpreadsheet size={24} />
+                     </div>
+                     <div>
+                       <p className="font-bold text-gray-900">نموذج CSV</p>
+                       <p className="text-xs text-gray-500">Download the pre-formatted template</p>
+                     </div>
+                   </div>
+                   <Button variant="secondary" className="gap-2">
+                     <Download size={16} /> Download Template
+                   </Button>
+                 </div>
+
+                 {/* Upload Area */}
+                 <div 
+                   onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                   onDragLeave={() => setIsDragging(false)}
+                   onDrop={(e) => { e.preventDefault(); setIsDragging(false); /* Handle file */ }}
+                   className={`border-2 border-dashed rounded-[2rem] p-12 text-center transition-all ${isDragging ? 'border-violet-600 bg-violet-50' : 'border-gray-200 bg-gray-50/30 hover:border-violet-300 hover:bg-gray-50'}`}
+                 >
+                   <div className="w-20 h-20 bg-white rounded-3xl shadow-sm flex items-center justify-center mx-auto mb-6 text-violet-600 group-hover:scale-110 transition-transform">
+                     <Upload size={32} />
+                   </div>
+                   <h4 className="text-xl font-bold text-gray-900 mb-2">ارفع ملف CSV الخاص بك</h4>
+                   <p className="text-sm text-gray-500 mb-8">اسحب وأفلت الملف هنا، أو انقر للتصفح</p>
+                   <input type="file" className="hidden" id="csv-upload" accept=".csv" />
+                   <label htmlFor="csv-upload">
+                     <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-md hover:shadow-lg px-8 cursor-pointer">اختيار ملف</Button>
+                   </label>
+                 </div>
+               </div>
+
+               <div className="p-8 bg-gray-50 border-t border-gray-100 flex gap-3">
+                 <Button variant="secondary" className="flex-1" onClick={() => setIsBulkImportModalOpen(false)}>إلغاء</Button>
+                 <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-md hover:shadow-lg flex-1" disabled>بدء الاستيراد</Button>
+               </div>
+             </div>
+           </div>
+         )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map((cls) => (
+               <div key={cls.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-violet-600"></div>
+                  <div className="flex justify-between items-start mb-4">
+                     <div>
+                        <h3 className="text-2xl font-bold text-gray-900">{cls.name}</h3>
+                        <p className="text-sm text-gray-500">{cls.gradeLevel}</p>
+                     </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-6">
+                     <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Users size={16} className="text-gray-400" />
+                        <span>{cls.students.length} إجمالي الطلاب</span>
+                     </div>
+                     <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <CheckCircle2 size={16} className="text-gray-400" />
+                        <span>{Math.round(85 + Math.random() * 10)}% إجمالي الحضور</span>
+                     </div>
+                     <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Briefcase size={16} className="text-gray-400" />
+                        <span>{Math.ceil(Math.random() * 3) + 2} إجمالي المدرسين</span>
+                     </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                     <Button 
+                       variant="secondary" 
+                       className="flex-1 text-xs"
+                       onClick={() => {
+                         setActiveClass(cls);
+                         setViewState('class-detail');
+                       }}
+                     >
+                       Manage Roster
+                     </Button>
+                  </div>
+               </div>
+            ))}
+          </div>
+      </div>
+    );
+  };
+
+  // 2. TEACHER: فصولي & Detailed Dashboard
+  const TeacherView = () => {
+    if (viewState === 'class-detail' && activeClass) {
+      return <ClassDetail role={role} classData={activeClass} />;
+    }
+
+    // Default List View
+    return (
+      <div className="animate-fadeIn space-y-8">
+         <div className="flex justify-between items-center">
+            <div>
+               <h2 className="text-3xl font-bold text-gray-900">فصولي</h2>
+               <p className="text-gray-500">إدارة جدولك اليومي وحصصك.</p>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {classes.map((cls) => (
+               <div 
+                 key={cls.id} 
+                 onClick={() => {
+                    setActiveClass(cls);
+                    setViewState('class-detail');
+                 }}
+                 className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group cursor-pointer"
+               >
+                  <div className="flex justify-between items-start mb-6">
+                     <div className="w-12 h-12 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
+                        <BookOpen size={24} />
+                     </div>
+                     <button className="text-gray-400 hover:text-gray-900"><MoreVertical size={20} /></button>
+                  </div>
+                  
+                  <h3 className="text-2xl font-bold text-gray-900 mb-1">{cls.name}</h3>
+                  <p className="text-sm text-gray-500 mb-6">{cls.gradeLevel} • Room {cls.room}</p>
+                  
+                  <div className="bg-gray-50 rounded-xl p-4 mb-6 flex justify-between items-center">
+                     <div>
+                        <p className="text-xs font-bold text-gray-500 uppercase">Next Session</p>
+                        <p className="font-bold text-gray-900">Mathematics</p>
+                     </div>
+                     <div className="text-right">
+                        <p className="text-xs font-bold text-gray-500 uppercase">Time</p>
+                        <p className="font-bold text-violet-600">08:00 AM</p>
+                     </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                     <Button 
+                       className="flex-1 shadow-violet-200" 
+                       onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveClass(cls);
+                          setViewState('class-detail');
+                       }}
+                     >
+                        View Dashboard
+                     </Button>
+                  </div>
+               </div>
+            ))}
+         </div>
+      </div>
+    );
+  };
+
+  // 3. STUDENT: Scanner Simulation
+  const StudentView = () => {
+    const [scanState, setScanState] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle');
+
+    const handleSimulateScan = () => {
+       setScanState('scanning');
+       setTimeout(() => {
+          setScanState('success');
+       }, 2000);
+    };
+
+    if (viewState === 'scanner') {
+       return (
+          <div className="max-w-md mx-auto bg-black min-h-[600px] rounded-[3rem] overflow-hidden relative shadow-2xl border-8 border-gray-800 animate-fadeIn">
+             {/* Camera Viewfinder UI */}
+             {scanState === 'scanning' || scanState === 'idle' ? (
+                <>
+                   <div className="absolute inset-0 bg-gray-800 z-0">
+                      <p className="text-white text-center mt-64 opacity-50">Camera Feed Simulation</p>
+                   </div>
+                   
+                   {/* Overlays */}
+                   <div className="absolute top-0 left-0 w-full p-6 flex justify-between items-center z-10">
+                      <button onClick={() => setViewState('list')} className="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center text-white">
+                         <XCircle size={24} />
+                      </button>
+                      <div className="bg-black/40 backdrop-blur-md px-3 py-1 rounded-full text-white text-xs font-medium">
+                         Scan QR Code
+                      </div>
+                      <div className="w-10"></div>
+                   </div>
+
+                   {/* Scanner Frame */}
+                   <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 border-2 border-white/50 rounded-3xl z-10 flex flex-col justify-between p-4">
+                      <div className="flex justify-between">
+                         <div className="w-4 h-4 border-l-4 border-t-4 border-violet-600 rounded-tl-lg"></div>
+                         <div className="w-4 h-4 border-r-4 border-t-4 border-violet-600 rounded-tr-lg"></div>
+                      </div>
+                      {scanState === 'scanning' && (
+                         <div className="w-full h-1 bg-violet-600 shadow-[0_0_15px_rgba(124,58,237,0.8)] animate-[scan_2s_infinite]"></div>
+                      )}
+                      <div className="flex justify-between">
+                         <div className="w-4 h-4 border-l-4 border-b-4 border-violet-600 rounded-bl-lg"></div>
+                         <div className="w-4 h-4 border-r-4 border-b-4 border-violet-600 rounded-br-lg"></div>
+                      </div>
+                   </div>
+                   
+                   {/* Trigger (since we can't really scan) */}
+                   <div className="absolute bottom-10 left-0 w-full flex justify-center z-20">
+                      {scanState === 'idle' && (
+                         <button 
+                           onClick={handleSimulateScan}
+                           className="bg-white text-black px-6 py-3 rounded-full font-bold shadow-lg active:scale-95 transition-transform"
+                         >
+                           Simulate Scan
+                         </button>
+                      )}
+                      {scanState === 'scanning' && <p className="text-white font-mono animate-pulse">Detecting...</p>}
+                   </div>
+                </>
+             ) : (
+                <div className="absolute inset-0 bg-green-500 flex flex-col items-center justify-center text-white p-8 text-center animate-fadeIn">
+                   <div className="w-24 h-24 bg-white text-green-500 rounded-full flex items-center justify-center mb-6 shadow-xl">
+                      <CheckCircle2 size={48} strokeWidth={3} />
+                   </div>
+                   <h2 className="text-3xl font-bold mb-2">Checked In!</h2>
+                   <p className="text-green-100 text-lg mb-8">Mathematics • Grade 10-A</p>
+                   <div className="bg-white/20 rounded-xl p-4 w-full backdrop-blur-sm mb-8">
+                      <div className="flex justify-between text-sm mb-1">
+                         <span className="opacity-80">Time</span>
+                         <span className="font-bold">08:02 AM</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                         <span className="opacity-80">Status</span>
+                         <span className="font-bold">حاضر</span>
+                      </div>
+                   </div>
+                   <button onClick={() => setViewState('list')} className="bg-white text-green-600 w-full py-3 rounded-xl font-bold">Done</button>
+                </div>
+             )}
+          </div>
+       );
+    }
+
+    return (
+       <div className="animate-fadeIn max-w-md mx-auto">
+          <div className="bg-gradient-to-br from-violet-600 to-violet-800 text-white rounded-3xl p-6 shadow-xl mb-6">
+             <div className="flex items-center gap-4 mb-6">
+                <img src={user.avatar} referrerPolicy="no-referrer" className="w-12 h-12 rounded-full border-2 border-white/30" alt="Profile" />
+                <div>
+                   <h3 className="font-bold text-lg">Hello, Layla!</h3>
+                   <p className="text-violet-100 text-sm">Grade 10 • ID: ST-2023-001</p>
+                </div>
+             </div>
+             
+             <div className="bg-white/10 rounded-2xl p-4 flex justify-between items-center backdrop-blur-sm">
+                <div>
+                   <p className="text-violet-100 text-xs font-bold uppercase mb-1">معدل الحضور</p>
+                   <p className="text-3xl font-bold">98%</p>
+                </div>
+                <div className="h-10 w-px bg-white/20"></div>
+                <div>
+                   <p className="text-violet-100 text-xs font-bold uppercase mb-1">الفصول</p>
+                   <p className="text-3xl font-bold">12</p>
+                </div>
+             </div>
+          </div>
+
+          <div className="space-y-4">
+             <button 
+               onClick={() => setViewState('scanner')}
+               className="w-full bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center justify-between group active:scale-95 transition-all"
+             >
+                <div className="flex items-center gap-4">
+                   <div className="w-12 h-12 bg-violet-50 rounded-full flex items-center justify-center text-violet-600 group-hover:bg-violet-700 group-hover:text-white transition-colors">
+                      <Scan size={24} />
+                   </div>
+                   <div className="text-left">
+                      <h4 className="font-bold text-gray-900 text-lg">Check-In</h4>
+                      <p className="text-gray-500 text-sm">امسح رمز QR للحضور</p>
+                   </div>
+                </div>
+                <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400">
+                   <ArrowRight size={16} />
+                </div>
+             </button>
+
+             <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><History size={18} /> Recent Activity</h4>
+                <div className="space-y-4">
+                   {[
+                      { sub: 'Mathematics', status: 'Present', time: 'Today, 08:02 AM' },
+                      { sub: 'Science', status: 'Present', time: 'Yesterday, 09:00 AM' },
+                      { sub: 'English', status: 'Late', time: 'Yesterday, 10:15 AM' }
+                   ].map((rec, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                         <div>
+                            <p className="font-bold text-gray-900 text-sm">{rec.sub}</p>
+                            <p className="text-xs text-gray-500">{rec.time}</p>
+                         </div>
+                         <span className={`text-xs font-bold px-2 py-1 rounded ${rec.status === 'Present' ? 'bg-green-50 text-green-700' : 'bg-violet-50 text-violet-700'}`}>
+                            {rec.status}
+                         </span>
+                      </div>
+                   ))}
+                </div>
+             </div>
+          </div>
+       </div>
+    );
+  };
+
+  return (
+    <div dir="rtl" className="h-full w-full">
+      {role === UserRole.ADMIN ? <AdminView /> : role === UserRole.STUDENT ? <StudentView /> : <TeacherView />}
+    </div>
+  );
+};
