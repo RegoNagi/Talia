@@ -676,7 +676,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     // Form State
     const [classData, setClassData] = useState({
       name: '',
-      grade: 'Grade 10',
+      grade: 'الصف 10',
       capacity: 25,
       teachers: {} as Record<string, string>,
       students: [] as string[],
@@ -705,9 +705,10 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
 
     const [activeSubjectForTeacher, setActiveSubjectForTeacher] = useState<string | null>(null);
     const [teacherSearchQuery, setTeacherSearchQuery] = useState('');
+    const [teacherFilterSubject, setTeacherFilterSubject] = useState('');
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [selectedGrade, setSelectedGrade] = useState('All Grades');
+    const [selectedGrade, setSelectedGrade] = useState('كل الصفوف');
 
     const toggleStudent = (studentId: string) => {
       setClassData(prev => {
@@ -792,7 +793,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                           value={classData.grade} 
                           onChange={e => setClassData({...classData, grade: e.target.value, students: []})}
                        >
-                          {['Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(g => <option key={g}>{g}</option>)}
+                          {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g}>{g}</option>)}
                        </select>
                     </div>
                     <div>
@@ -916,7 +917,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                         </div>
 
                         <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden flex flex-col h-[400px]">
-                          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-4">
+                          <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between gap-3">
                             <div className="relative flex-1">
                               <input 
                                 type="text" 
@@ -927,12 +928,23 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                               />
                               <Users className="absolute left-3 top-3 text-gray-400" size={16} />
                             </div>
+                            <select
+                              value={teacherFilterSubject}
+                              onChange={(e) => setTeacherFilterSubject(e.target.value)}
+                              className="p-2.5 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 text-sm"
+                            >
+                              <option value="">كل المواد</option>
+                              {['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'].map(s => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
                           </div>
                           
                           <div className="overflow-y-auto flex-1 p-2">
                             {(() => {
                               const filteredTeachers = realTeachers.filter(t => 
-                                (t.specialization.includes(activeSubjectForTeacher!) || ['English', 'Arabic', 'MainTeacher', 'AssistantTeacher'].includes(activeSubjectForTeacher!)) &&
+                                ((t as any).grades && (t as any).grades.includes(classData.grade)) &&
+                                (!teacherFilterSubject || ((t as any).subjects && (t as any).subjects.includes(teacherFilterSubject))) &&
                                 (t.name.toLowerCase().includes(teacherSearchQuery.toLowerCase()) || 
                                  t.id.toLowerCase().includes(teacherSearchQuery.toLowerCase()))
                               );
@@ -1142,7 +1154,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                   </button>
                   {isFilterOpen && (
                      <div className="absolute top-full right-0 mt-2 z-50 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1">
-                        {['All Grades', 'Grade 10', 'Grade 11', 'Grade 12'].map((grade) => (
+                        {['كل الصفوف', 'الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map((grade) => (
                            <div
                               key={grade}
                               onClick={() => {

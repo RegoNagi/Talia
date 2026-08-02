@@ -95,14 +95,19 @@ export async function getClassSections(): Promise<ClassSection[]> {
 }
 
 // بيجيب المدرسين الحقيقيين (مع بياناتهم من جدول users)
-export async function getTeachers(): Promise<Teacher[]> {
+const ALL_SUBJECTS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
+
+export async function getTeachers(): Promise<(Teacher & { grades: string[]; subjects: string[]; teacherType: 'Main' | 'Assistant' })[]> {
   const { data, error } = await supabase
     .from('teachers')
     .select(`
       id,
       specialization,
       employment_type,
-      users ( name, email )
+      teacher_type,
+      users ( name, email ),
+      teacher_grades ( grade ),
+      teacher_subjects ( subject )
     `);
 
   if (error) {
@@ -122,6 +127,9 @@ export async function getTeachers(): Promise<Teacher[]> {
     phone: '',
     assignedClasses: [],
     academicLoad: 0,
+    grades: (row.teacher_grades || []).map((g: any) => g.grade),
+    subjects: (row.teacher_subjects || []).map((s: any) => s.subject),
+    teacherType: row.teacher_type ?? 'Main',
   }));
 }
 
@@ -157,13 +165,16 @@ export async function getTeachersBySubject(subject: string): Promise<Teacher[]> 
     }));
 }
 
-// بينشئ معلم حقيقي جديد (يوزر + سجل معلم + ربطه بمادته)
+// بينشئ معلم حقيقي جديد (يوزر + سجل معلم + ربطه بمواده وصفوفه ونوعه)
 export async function createTeacher(input: {
   name: string;
   email: string;
   hiringDate: string;
   employmentType: string;
-  subject: string;
+  subjects: string[];
+  allSubjects: boolean;
+  grades: string[];
+  teacherType: 'Main' | 'Assistant';
 }): Promise<string | null> {
   const { data: userRow, error: userError } = await supabase
     .from('users')
@@ -176,13 +187,17 @@ export async function createTeacher(input: {
     return null;
   }
 
+  const effectiveSubjects = input.allSubjects ? ALL_SUBJECTS : input.subjects;
+  const specializationLabel = input.allSubjects ? 'كل المواد' : (effectiveSubjects.join('، ') || '');
+
   const { data: teacherRow, error: teacherError } = await supabase
     .from('teachers')
     .insert({
       user_id: userRow.id,
-      specialization: input.subject,
+      specialization: specializationLabel,
       employment_type: input.employmentType,
       hiring_date: input.hiringDate || null,
+      teacher_type: input.teacherType,
     })
     .select('id')
     .single();
@@ -192,11 +207,16 @@ export async function createTeacher(input: {
     return null;
   }
 
-  if (input.subject) {
-    const { error: subjectError } = await supabase
-      .from('teacher_subjects')
-      .insert({ teacher_id: teacherRow.id, subject: input.subject });
-    if (subjectError) console.error('Error linking teacher to subject:', subjectError);
+  if (effectiveSubjects.length > 0) {
+    const rows = effectiveSubjects.map(s => ({ teacher_id: teacherRow.id, subject: s }));
+    const { error: subjectError } = await supabase.from('teacher_subjects').insert(rows);
+    if (subjectError) console.error('Error linking teacher to subjects:', subjectError);
+  }
+
+  if (input.grades.length > 0) {
+    const rows = input.grades.map(g => ({ teacher_id: teacherRow.id, grade: g }));
+    const { error: gradesError } = await supabase.from('teacher_grades').insert(rows);
+    if (gradesError) console.error('Error linking teacher to grades:', gradesError);
   }
 
   return teacherRow.id;

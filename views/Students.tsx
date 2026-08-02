@@ -146,8 +146,26 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
      email: '', 
      hiringDate: new Date().toISOString().split('T')[0], 
      type: 'Full-time', 
-     subject: 'رياضيات'
+     subjects: [] as string[],
+     allSubjects: false,
+     grades: [] as string[],
+     teacherType: 'Main' as 'Main' | 'Assistant'
   });
+  const GRADE_OPTIONS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+  const SUBJECT_OPTIONS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
+  const toggleTeacherGrade = (grade: string) => {
+    setNewTeacher(prev => ({
+      ...prev,
+      grades: prev.grades.includes(grade) ? prev.grades.filter(g => g !== grade) : [...prev.grades, grade],
+    }));
+  };
+  const toggleTeacherSubject = (subject: string) => {
+    setNewTeacher(prev => ({
+      ...prev,
+      allSubjects: false,
+      subjects: prev.subjects.includes(subject) ? prev.subjects.filter(s => s !== subject) : [...prev.subjects, subject],
+    }));
+  };
 
   // Admin Form
   const [newAdmin, setNewAdmin] = useState({
@@ -202,13 +220,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         email: newTeacher.email,
         hiringDate: newTeacher.hiringDate,
         employmentType: newTeacher.type,
-        subject: newTeacher.subject,
+        subjects: newTeacher.subjects,
+        allSubjects: newTeacher.allSubjects,
+        grades: newTeacher.grades,
+        teacherType: newTeacher.teacherType,
       });
       setIsCreatingTeacher(false);
       if (id) {
         refreshTeachers();
         setIsAddTeacherOpen(false);
-        setNewTeacher({ name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time', subject: 'رياضيات' });
+        setNewTeacher({ name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time', subjects: [], allSubjects: false, grades: [], teacherType: 'Main' });
       } else {
         alert('حصل خطأ أثناء إنشاء المعلم. تأكد إنك شغّلت كود إضافة عمود hiring_date في Supabase.');
       }
@@ -810,19 +831,76 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                       </select>
                    </div>
                    <div>
-                      <label className="block text-sm font-bold text-gray-700 mb-2">Primary Subject</label>
-                      <select 
-                        value={newTeacher.subject}
-                        onChange={(e) => setNewTeacher({...newTeacher, subject: e.target.value})}
-                        className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white"
-                      >
-                        <option value="رياضيات">رياضيات</option>
-                        <option value="علوم">علوم</option>
-                        <option value="لغة إنجليزية">لغة إنجليزية</option>
-                        <option value="لغة عربية">لغة عربية</option>
-                        <option value="تاريخ">تاريخ</option>
-                        <option value="فنون">فنون</option>
-                      </select>
+                      <label className="block text-sm font-bold text-gray-700 mb-2">نوع المعلم</label>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewTeacher({...newTeacher, teacherType: 'Main'})}
+                          className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
+                            newTeacher.teacherType === 'Main' ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          مدرس رئيسي
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewTeacher({...newTeacher, teacherType: 'Assistant'})}
+                          className={`flex-1 px-4 py-3 rounded-xl text-sm font-bold border transition-all ${
+                            newTeacher.teacherType === 'Assistant' ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          مدرس مساعد
+                        </button>
+                      </div>
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">المواد اللي بيدرّسها</label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setNewTeacher({...newTeacher, allSubjects: !newTeacher.allSubjects, subjects: []})}
+                          className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${
+                            newTeacher.allSubjects ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                          }`}
+                        >
+                          كل المواد
+                        </button>
+                        {SUBJECT_OPTIONS.map(subject => (
+                          <button
+                            type="button"
+                            key={subject}
+                            disabled={newTeacher.allSubjects}
+                            onClick={() => toggleTeacherSubject(subject)}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                              newTeacher.subjects.includes(subject)
+                                ? 'bg-violet-600 border-violet-600 text-white'
+                                : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            {subject}
+                          </button>
+                        ))}
+                      </div>
+                      {newTeacher.allSubjects && <p className="text-xs text-slate-400 mt-1">هيدرّس كل مواد الفصل (مناسب لمدرس فصل ابتدائي مثلًا).</p>}
+                   </div>
+                   <div className="md:col-span-2">
+                      <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف اللي بيدرّس فيها (تقدر تختار أكتر من صف)</label>
+                      <div className="flex flex-wrap gap-2">
+                        {GRADE_OPTIONS.map(grade => (
+                          <button
+                            type="button"
+                            key={grade}
+                            onClick={() => toggleTeacherGrade(grade)}
+                            className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${
+                              newTeacher.grades.includes(grade)
+                                ? 'bg-violet-600 border-violet-600 text-white'
+                                : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            {grade}
+                          </button>
+                        ))}
+                      </div>
                    </div>
                 </div>
 
