@@ -103,7 +103,43 @@ export async function getTeachers(): Promise<Teacher[]> {
   }));
 }
 
-// بينشئ فصل دراسي جديد في قاعدة البيانات، وبيسجّل الطلاب المختارين فيه
+// بيحفظ جلسة حضور جديدة (تاريخ اليوم + حالة كل طالب) في قاعدة البيانات
+export async function saveAttendanceSession(input: {
+  sectionId: string;
+  date: string;
+  subject?: string;
+  records: { studentId: string; status: string }[];
+}): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('attendance_sessions')
+    .insert({
+      section_id: input.sectionId,
+      date: input.date,
+      subject: input.subject || null,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    console.error('Error creating attendance session:', error);
+    return null;
+  }
+
+  const sessionId = data.id;
+
+  if (input.records.length > 0) {
+    const rows = input.records.map((r) => ({
+      session_id: sessionId,
+      student_id: r.studentId,
+      status: r.status,
+      method: 'Manual',
+    }));
+    const { error: recError } = await supabase.from('attendance_records').insert(rows);
+    if (recError) console.error('Error saving attendance records:', recError);
+  }
+
+  return sessionId;
+}
 export async function createClassSection(input: {
   name: string;
   gradeLevel: string;

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
-import { getStudents, getClassSections, getTeachers, createClassSection } from '../services/supabaseData';
+import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession } from '../services/supabaseData';
 import { Button } from '../components/Button';
 import { ClassCalendar } from './ClassCalendar';
 import { 
@@ -227,6 +227,30 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
        setScannedStudents(enrolledStudents.map(s => s.id));
     };
 
+    const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+    const [attendanceSaved, setAttendanceSaved] = useState(false);
+
+    const saveAttendance = async () => {
+      setIsSavingAttendance(true);
+      const records = enrolledStudents.map(s => ({
+        studentId: s.id,
+        status: manualAttendance[s.id] || 'Absent',
+      }));
+      const sessionId = await saveAttendanceSession({
+        sectionId: classData.id,
+        date: new Date().toISOString().slice(0, 10),
+        subject: classData.name,
+        records,
+      });
+      setIsSavingAttendance(false);
+      if (sessionId) {
+        setAttendanceSaved(true);
+        setTimeout(() => setAttendanceSaved(false), 3000);
+      } else {
+        alert('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.');
+      }
+    };
+
     const toggleStatus = (studentId: string) => {
        const current = manualAttendance[studentId] || 'Absent';
        const states: AttendanceStatus[] = ['Present', 'Absent', 'Late', 'Excused'];
@@ -448,9 +472,14 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                     </div>
                   </div>
                   {role === UserRole.TEACHER && (
-                    <Button variant="secondary" className="text-xs h-8" onClick={markAllPresent}>
-                       <CheckCircle2 size={14} /> تسجيل الكل حاضر
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button variant="secondary" className="text-xs h-8" onClick={markAllPresent}>
+                         <CheckCircle2 size={14} /> تسجيل الكل حاضر
+                      </Button>
+                      <Button variant="primary" className="text-xs h-8 bg-violet-600 hover:bg-violet-700 text-white" onClick={saveAttendance} disabled={isSavingAttendance}>
+                         {isSavingAttendance ? 'جاري الحفظ...' : attendanceSaved ? 'تم الحفظ ✓' : 'حفظ الحضور'}
+                      </Button>
+                    </div>
                   )}
                </div>
                <div className="flex-1 overflow-y-auto p-2">
