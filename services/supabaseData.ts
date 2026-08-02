@@ -25,6 +25,43 @@ async function getAttendancePercentages(): Promise<Record<string, number>> {
   return result;
 }
 
+// بينشئ طالب حقيقي جديد (يوزر + سجل طالب)
+export async function createStudent(input: {
+  name: string;
+  grade: string;
+  dob: string;
+}): Promise<string | null> {
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .insert({ name: input.name, role: 'STUDENT' })
+    .select('id')
+    .single();
+
+  if (userError || !userRow) {
+    console.error('Error creating student user:', userError);
+    return null;
+  }
+
+  const { data: studentRow, error: studentError } = await supabase
+    .from('students')
+    .insert({
+      user_id: userRow.id,
+      grade: input.grade,
+      dob: input.dob || null,
+      enrollment_date: new Date().toISOString().slice(0, 10),
+      status: 'Active',
+    })
+    .select('id')
+    .single();
+
+  if (studentError || !studentRow) {
+    console.error('Error creating student record:', studentError);
+    return null;
+  }
+
+  return studentRow.id;
+}
+
 export async function getStudents(): Promise<Student[]> {
   const { data, error } = await supabase
     .from('students')

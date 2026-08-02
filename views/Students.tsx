@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents, getTeachers, createTeacher } from '../services/supabaseData';
+import { getStudents, getTeachers, createTeacher, createStudent } from '../services/supabaseData';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
 import { ParentsManagement } from './ParentsManagement';
 import { StudentProfile } from './StudentProfile';
@@ -114,17 +114,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
     });
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  const refreshStudents = () => {
     setStudentsLoading(true);
     getStudents().then((data) => {
-      if (isMounted) {
-        setStudentsList(data);
-        setStudentsLoading(false);
-      }
+      setStudentsList(data);
+      setStudentsLoading(false);
     });
+  };
+
+  useEffect(() => {
+    refreshStudents();
     refreshTeachers();
-    return () => { isMounted = false; };
   }, []);
 
   // Modal States
@@ -137,7 +137,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   
   // Student Form
   const [newStudent, setNewStudent] = useState({
-     firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'Grade 10', dob: ''
+     firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: ''
   });
 
   // Teacher Form
@@ -193,21 +193,25 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
      }
   };
 
-  const handleCreateStudent = () => {
-      const student: Student = {
-          id: `ST-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
-          name: [newStudent.firstName, newStudent.secondName, newStudent.thirdName, newStudent.lastName].filter(Boolean).join(' ') || 'New Student',
-          grade: newStudent.grade,
-          attendance: 100,
-          performance: 100,
-          status: 'Active',
-          fees: [],
-          installmentPlans: [],
-          reportCards: []
-      };
-      setStudentsList([student, ...studentsList]);
-      setIsAddStudentOpen(false);
-      setNewStudent({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'Grade 10', dob: '' });
+  const [isCreatingStudent, setIsCreatingStudent] = useState(false);
+
+  const handleCreateStudent = async () => {
+      const fullName = [newStudent.firstName, newStudent.secondName, newStudent.thirdName, newStudent.lastName].filter(Boolean).join(' ');
+      if (!fullName.trim()) return;
+      setIsCreatingStudent(true);
+      const id = await createStudent({
+        name: fullName,
+        grade: newStudent.grade,
+        dob: newStudent.dob,
+      });
+      setIsCreatingStudent(false);
+      if (id) {
+        refreshStudents();
+        setIsAddStudentOpen(false);
+        setNewStudent({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: '' });
+      } else {
+        alert('حصل خطأ أثناء إنشاء الطالب. راجع الـ Console (F12) لمعرفة التفاصيل.');
+      }
   };
 
   const [isCreatingTeacher, setIsCreatingTeacher] = useState(false);
@@ -753,7 +757,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                            onChange={(e) => setNewStudent({...newStudent, grade: e.target.value})}
                            className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white"
                          >
-                           {['Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'Grade 7', 'Grade 8', 'Grade 9', 'Grade 10', 'Grade 11', 'Grade 12'].map(g => <option key={g} value={g}>{g}</option>)}
+                           {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g} value={g}>{g}</option>)}
                          </select>
                       </div>
                       <div className="md:col-span-2">
@@ -770,7 +774,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
 
                 <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
                    <Button variant="secondary" className="flex-1" onClick={() => setIsAddStudentOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
-                   <Button variant="primary" className="flex-1" onClick={handleCreateStudent}>Create Student</Button>
+                   <Button variant="primary" className="flex-1" disabled={isCreatingStudent} onClick={handleCreateStudent}>{isCreatingStudent ? 'جاري الإنشاء...' : 'Create Student'}</Button>
                 </div>
              </div>
           </div>
