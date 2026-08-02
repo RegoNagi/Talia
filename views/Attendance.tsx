@@ -16,7 +16,8 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { STUDENTS, CLASSES } from '../services/mockData';
+import { getStudents, getClassSections, saveAttendanceSession } from '../services/supabaseData';
+import { Student, ClassSection } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface AttendanceProps {
@@ -67,6 +68,41 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const [selectedClass, setSelectedClass] = useState<string | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
   const [attendanceData, setAttendanceData] = useState<Record<string, string>>({});
+  const [realClasses, setRealClasses] = useState<ClassSection[]>([]);
+  const [realStudents, setRealStudents] = useState<Student[]>([]);
+  const periods = ['الحصة 1: رياضيات', 'الحصة 2: فيزياء', 'الحصة 3: إنجليزي'];
+  const [selectedPeriod, setSelectedPeriod] = useState(periods[0]);
+  const [isSavingAttendance, setIsSavingAttendance] = useState(false);
+  const [attendanceSaved, setAttendanceSaved] = useState(false);
+
+  React.useEffect(() => {
+    getClassSections().then(setRealClasses);
+    getStudents().then(setRealStudents);
+  }, []);
+
+  const saveAttendance = async () => {
+    if (!selectedClass) return;
+    setIsSavingAttendance(true);
+    const classStudents = realStudents.filter(s => realClasses.find(c => c.id === selectedClass)?.students.includes(s.id));
+    const statusMap: Record<string, string> = { present: 'Present', absent: 'Absent', late: 'Late', excused: 'Excused' };
+    const records = classStudents.map(s => ({
+      studentId: s.id,
+      status: statusMap[attendanceData[s.id]] || 'Absent',
+    }));
+    const sessionId = await saveAttendanceSession({
+      sectionId: selectedClass,
+      date: new Date().toISOString().slice(0, 10),
+      subject: selectedPeriod,
+      records,
+    });
+    setIsSavingAttendance(false);
+    if (sessionId) {
+      setAttendanceSaved(true);
+      setTimeout(() => setAttendanceSaved(false), 3000);
+    } else {
+      alert('حصل خطأ أثناء حفظ الحضور. تأكد إنك شغّلت كود إنشاء جداول الحضور في Supabase.');
+    }
+  };
 
   // Admin State
   const [logSearch, setLogSearch] = useState('');
@@ -146,8 +182,9 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   const markAllPresent = () => {
-    const newAttendance: Record<string, string> = {};
-    STUDENTS.forEach(student => {
+    const newAttendance: Record<string, string> = { ...attendanceData };
+    const classStudentIds = realClasses.find(c => c.id === selectedClass)?.students || [];
+    realStudents.filter(s => classStudentIds.includes(s.id)).forEach(student => {
       newAttendance[student.id] = 'present';
     });
     setAttendanceData(newAttendance);
@@ -567,7 +604,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
               <p className="text-gray-500 mb-6">اختر فصلاً لبدء تسجيل حضور اليوم.</p>
               
               <div className="space-y-3">
-                {CLASSES.slice(0, 3).map(cls => (
+                {realClasses.slice(0, 3).map(cls => (
                   <button
                     key={cls.id}
                     onClick={() => setSelectedClass(cls.id)}
@@ -593,8 +630,8 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                     <ChevronDown size={24} className="rotate-90 text-slate-600" />
                   </button>
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">{CLASSES.find(c => c.id === selectedClass)?.name}</h2>
-                    <p className="text-slate-500">تسجيل الحضور للحصة 1 (الرياضيات) • 13 أبريل، 2026</p>
+                    <h2 className="text-2xl font-bold text-slate-900">{realClasses.find(c => c.id === selectedClass)?.name}</h2>
+                    <p className="text-slate-500">تسجيل الحضور لـ{selectedPeriod} • {new Date().toLocaleDateString('ar-EG')}</p>
                   </div>
                 </div>
                 
@@ -612,19 +649,30 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                   <Button onClick={markAllPresent} className="bg-green-600 hover:bg-green-700 text-white">
                     <CheckCircle2 size={16} className="mr-2" /> تحديد الكل كحاضر
                   </Button>
+                  <Button onClick={saveAttendance} disabled={isSavingAttendance} className="bg-violet-600 hover:bg-violet-700 text-white">
+                    {isSavingAttendance ? 'جاري الحفظ...' : attendanceSaved ? 'تم الحفظ ✓' : 'حفظ الحضور'}
+                  </Button>
                 </div>
               </div>
 
               {/* Period Selector Bar */}
               <div className="flex items-center gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                 <button className="whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold bg-violet-600 text-white shadow-md transition-all">الحصة 1: رياضيات</button>
-                 <button className="whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">الحصة 2: فيزياء</button>
-                 <button className="whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 transition-all">الحصة 3: إنجليزي</button>
+                 {periods.map(p => (
+                   <button
+                     key={p}
+                     onClick={() => setSelectedPeriod(p)}
+                     className={`whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold transition-all ${
+                       selectedPeriod === p ? 'bg-violet-600 text-white shadow-md' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                     }`}
+                   >
+                     {p}
+                   </button>
+                 ))}
                  <button disabled className="whitespace-nowrap px-5 py-2 rounded-full text-sm font-bold bg-slate-50 border border-slate-100 text-slate-400 cursor-not-allowed">الحصة 4: استراحة</button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {STUDENTS.filter(s => s.name.toLowerCase().includes(studentSearch.toLowerCase())).map(student => {
+                {realStudents.filter(s => (realClasses.find(c => c.id === selectedClass)?.students || []).includes(s.id) && s.name.toLowerCase().includes(studentSearch.toLowerCase())).map(student => {
                   const status = attendanceData[student.id];
                   
                   return (
