@@ -62,11 +62,12 @@ export async function createStudent(input: {
   return studentRow.id;
 }
 
-export async function getStudents(): Promise<Student[]> {
+export async function getStudents(): Promise<(Student & { userId: string })[]> {
   const { data, error } = await supabase
     .from('students')
     .select(`
       id,
+      user_id,
       grade,
       national_id,
       dob,
@@ -84,6 +85,7 @@ export async function getStudents(): Promise<Student[]> {
 
   return (data || []).map((row: any) => ({
     id: row.id,
+    userId: row.user_id,
     name: row.users?.name ?? 'بدون اسم',
     grade: row.grade ?? '',
     attendance: attendanceMap[row.id] ?? 0,
@@ -96,6 +98,63 @@ export async function getStudents(): Promise<Student[]> {
     nationalId: row.national_id ?? undefined,
     enrollmentDate: row.enrollment_date ?? undefined,
   }));
+}
+
+// بيعدّل بيانات طالب موجود
+export async function updateStudent(input: {
+  studentId: string;
+  userId: string;
+  name: string;
+  grade: string;
+  dob: string;
+  status: string;
+}): Promise<boolean> {
+  const { error: userError } = await supabase.from('users').update({ name: input.name }).eq('id', input.userId);
+  if (userError) {
+    console.error('Error updating student user:', userError);
+    return false;
+  }
+  const { error: studentError } = await supabase
+    .from('students')
+    .update({ grade: input.grade, dob: input.dob || null, status: input.status })
+    .eq('id', input.studentId);
+  if (studentError) {
+    console.error('Error updating student record:', studentError);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح طالب واحد (مسح اليوزر بيمسح معاه سجل الطالب والتسجيلات تلقائيًا بسبب CASCADE)
+export async function deleteStudent(userId: string): Promise<boolean> {
+  const { error } = await supabase.from('users').delete().eq('id', userId);
+  if (error) {
+    console.error('Error deleting student:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح مجموعة طلاب دفعة واحدة
+export async function bulkDeleteStudents(userIds: string[]): Promise<boolean> {
+  if (userIds.length === 0) return true;
+  const { error } = await supabase.from('users').delete().in('id', userIds);
+  if (error) {
+    console.error('Error bulk deleting students:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح مجموعة معلمين دفعة واحدة
+export async function bulkDeleteTeachers(userIds: string[]): Promise<boolean> {
+  if (userIds.length === 0) return true;
+  const { error } = await supabase.from('users').delete().in('id', userIds);
+  if (error) {
+    console.error('Error bulk deleting teachers:', error);
+    return false;
+  }
+  return true;
 }
 
 // بيجيب الفصول الدراسية الحقيقية مع قائمة الطلاب المسجلين في كل فصل

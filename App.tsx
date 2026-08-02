@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { UserRole, Language, User, NavItem } from './types';
 import { Header } from './components/Header';
 import { ToastContainer } from './components/Toast';
+import { ConfirmDialogContainer } from './components/ConfirmDialog';
 import { Dashboard } from './views/Dashboard';
 import { LessonPlanner } from './views/LessonPlanner';
 import { LessonPlanLibrary } from './views/LessonPlanLibrary';
@@ -727,6 +728,7 @@ const App: React.FC = () => {
       </div>
       
       <ToastContainer />
+      <ConfirmDialogContainer />
     </div>
   );
 };

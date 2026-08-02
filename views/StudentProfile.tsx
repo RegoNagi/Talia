@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Student, Language, ReportCard } from '../types';
 import { Button } from '../components/Button';
+import { showToast } from '../components/Toast';
 import AdmissionForm from '../components/AdmissionForm';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -109,7 +110,7 @@ Result: ${doc.gradeAverage}`;
         url: window.location.href,
       }).catch(console.error);
     } else {
-      alert(`Sharing link for ${doc.title} copied to clipboard!`);
+      showToast(`Sharing link for ${doc.title} copied to clipboard!`, 'success');
     }
   };
 
@@ -117,7 +118,7 @@ Result: ${doc.gradeAverage}`;
     setIsPublishing(true);
     setTimeout(() => {
       setIsPublishing(false);
-      alert(`${doc.title} has been published to the student's Space!`);
+      showToast(`${doc.title} has been published to the student's Space!`, 'success');
       const updatedReports = reports.map(r => r.id === doc.id ? { ...r, status: 'Released' as const } : r);
       setReports(updatedReports);
       if (viewingDocument?.id === doc.id) {
@@ -684,7 +685,7 @@ Result: ${doc.gradeAverage}`;
               </button>
               <button 
                 onClick={() => {
-                  alert('تم إرسال الرسالة بنجاح');
+                  showToast('تم إرسال الرسالة بنجاح', 'success');
                   setIsMessageModalOpen(false);
                   setMessageContent('');
                 }}

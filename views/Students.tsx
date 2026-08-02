@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher } from '../services/supabaseData';
+import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
-import { showToast } from '../components/Toast';
+import { confirmDialog } from '../components/ConfirmDialog';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
 import { ParentsManagement } from './ParentsManagement';
 import { StudentProfile } from './StudentProfile';
@@ -315,6 +315,63 @@ const EditTeacherModal: React.FC<{ teacher: any; onClose: () => void; onSubmit: 
   );
 };
 
+const EditStudentModal: React.FC<{ student: any; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ student, onClose, onSubmit }) => {
+  const [form, setForm] = useState({
+    name: student.name || '',
+    grade: student.grade || 'الصف 10',
+    dob: student.dob || '',
+    status: student.status || 'Active',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return;
+    setIsSubmitting(true);
+    const ok = await onSubmit(form);
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+       <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+             <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الطالب</h3>
+             <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">الاسم الكامل</label>
+                <input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+                <select value={form.grade} onChange={(e) => setForm({...form, grade: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                  {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">تاريخ الميلاد</label>
+                <input type="date" value={form.dob} onChange={(e) => setForm({...form, dob: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+             </div>
+             <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">الحالة</label>
+                <select value={form.status} onChange={(e) => setForm({...form, status: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                  <option value="Active">نشط</option>
+                  <option value="At Risk">في خطر</option>
+                  <option value="Inactive">غير نشط</option>
+                </select>
+             </div>
+          </div>
+          <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+             <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
+             <Button variant="primary" className="flex-1" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}</Button>
+          </div>
+       </div>
+    </div>
+  );
+};
+
 export const UserManagement: React.FC<UserManagementProps> = ({ language, role, onEditProfile, activeTabProp = 'students', onTabChange }) => {
   const isRTL = language === Language.AR;
   const [activeTab, setActiveTabInternal] = useState<'students' | 'parents' | 'teachers' | 'admins'>(activeTabProp);
@@ -377,6 +434,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   // تعديل وحذف المعلمين
   const [openTeacherMenu, setOpenTeacherMenu] = useState<string | null>(null);
   const [editingTeacher, setEditingTeacher] = useState<any | null>(null);
+  const [selectedTeacherIds, setSelectedTeacherIds] = useState<string[]>([]);
+  const toggleSelectTeacher = (id: string) => {
+    setSelectedTeacherIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  // تعديل وحذف الطلاب
+  const [openStudentMenu, setOpenStudentMenu] = useState<string | null>(null);
+  const [editingStudent, setEditingStudent] = useState<any | null>(null);
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const toggleSelectStudent = (id: string) => {
+    setSelectedStudentIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+  const toggleSelectAllStudents = () => {
+    setSelectedStudentIds(prev => prev.length === filteredStudents.length ? [] : filteredStudents.map(s => s.id));
+  };
 
   const handleUpdateTeacher = async (form: any): Promise<boolean> => {
     if (!editingTeacher) return false;
@@ -401,13 +473,73 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   };
 
   const handleDeleteTeacher = async (teacher: any) => {
-    if (!confirm(`متأكد إنك عايز تمسح "${teacher.name}"؟ الإجراء ده مينفعش يترجع.`)) return;
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح "${teacher.name}"؟ الإجراء ده مينفعش يترجع.`, 'حذف');
+    if (!confirmed) return;
     const ok = await deleteTeacher(teacher.userId);
     if (ok) {
       refreshTeachers();
       showToast('تم حذف المعلم.', 'success');
     } else {
       showToast('حصل خطأ أثناء حذف المعلم.', 'error');
+    }
+  };
+
+  const handleBulkDeleteTeachers = async () => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح ${selectedTeacherIds.length} معلم؟ الإجراء ده مينفعش يترجع.`, 'حذف الكل');
+    if (!confirmed) return;
+    const userIds = teachersList.filter(t => selectedTeacherIds.includes(t.id)).map(t => t.userId);
+    const ok = await bulkDeleteTeachers(userIds);
+    if (ok) {
+      refreshTeachers();
+      setSelectedTeacherIds([]);
+      showToast('تم حذف المعلمين المحددين.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف الجماعي.', 'error');
+    }
+  };
+
+  const handleUpdateStudent = async (form: any): Promise<boolean> => {
+    if (!editingStudent) return false;
+    const ok = await updateStudent({
+      studentId: editingStudent.id,
+      userId: editingStudent.userId,
+      name: form.name,
+      grade: form.grade,
+      dob: form.dob,
+      status: form.status,
+    });
+    if (ok) {
+      refreshStudents();
+      showToast('تم تعديل بيانات الطالب بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء تعديل الطالب.', 'error');
+    }
+    return ok;
+  };
+
+  const handleDeleteStudent = async (student: any) => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح "${student.name}"؟ الإجراء ده مينفعش يترجع.`, 'حذف');
+    if (!confirmed) return;
+    const ok = await deleteStudent(student.userId);
+    if (ok) {
+      refreshStudents();
+      showToast('تم حذف الطالب.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء حذف الطالب.', 'error');
+    }
+  };
+
+  const handleBulkDeleteStudents = async () => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح ${selectedStudentIds.length} طالب؟ الإجراء ده مينفعش يترجع.`, 'حذف الكل');
+    if (!confirmed) return;
+    const userIds = studentsList.filter(s => selectedStudentIds.includes(s.id)).map((s: any) => s.userId);
+    const ok = await bulkDeleteStudents(userIds);
+    if (ok) {
+      refreshStudents();
+      setSelectedStudentIds([]);
+      showToast('تم حذف الطلاب المحددين.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف الجماعي.', 'error');
     }
   };
 
@@ -577,11 +709,24 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
           </div>
        </div>
 
+       {selectedStudentIds.length > 0 && (
+         <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+           <span className="text-sm font-bold text-violet-800">{selectedStudentIds.length} طالب محدد</span>
+           <div className="flex gap-2">
+             <button onClick={() => setSelectedStudentIds([])} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-white rounded-lg">إلغاء التحديد</button>
+             <button onClick={handleBulkDeleteStudents} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">حذف المحدد</button>
+           </div>
+         </div>
+       )}
+
        <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
           <table className={`w-full text-sm ${isRTL ? 'text-right' : 'text-left'}`}>
             <thead className="bg-gray-50/50 text-gray-500 font-semibold border-b border-gray-100">
               <tr>
+                <th className="px-4 py-5 w-10">
+                  <input type="checkbox" checked={filteredStudents.length > 0 && selectedStudentIds.length === filteredStudents.length} onChange={toggleSelectAllStudents} />
+                </th>
                 <th className="px-8 py-5">{t_name}</th>
                 <th className="px-6 py-5">{t_id}</th>
                 <th className="px-6 py-5">{t_gradeLevel}</th>
@@ -592,13 +737,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
             </thead>
             <tbody className="divide-y divide-gray-50">
               {studentsLoading && (
-                <tr><td colSpan={6} className="px-8 py-10 text-center text-gray-400">{isRTL ? 'جاري تحميل الطلاب من قاعدة البيانات...' : 'Loading students from the database...'}</td></tr>
+                <tr><td colSpan={7} className="px-8 py-10 text-center text-gray-400">{isRTL ? 'جاري تحميل الطلاب من قاعدة البيانات...' : 'Loading students from the database...'}</td></tr>
               )}
               {!studentsLoading && filteredStudents.length === 0 && (
-                <tr><td colSpan={6} className="px-8 py-10 text-center text-gray-400">{isRTL ? 'لا يوجد طلاب بعد' : 'No students yet'}</td></tr>
+                <tr><td colSpan={7} className="px-8 py-10 text-center text-gray-400">{isRTL ? 'لا يوجد طلاب بعد' : 'No students yet'}</td></tr>
               )}
               {filteredStudents.map((student) => (
                 <tr key={student.id} className="hover:bg-violet-50/30 transition-colors group cursor-pointer" onClick={() => setSelectedStudent(student)}>
+                  <td className="px-4 py-5" onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={selectedStudentIds.includes(student.id)} onChange={() => toggleSelectStudent(student.id)} />
+                  </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-3">
                       {student.avatar ? (
@@ -641,10 +789,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                       {getTranslatedStatus(student.status)}
                     </span>
                   </td>
-                  <td className="px-6 py-5">
-                    <button className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
-                      <ChevronRight size={18} className={isRTL ? "rotate-180" : ""} />
-                    </button>
+                  <td className="px-6 py-5" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center justify-center gap-1 relative">
+                      <button onClick={() => setOpenStudentMenu(openStudentMenu === student.id ? null : student.id)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                        <MoreVertical size={16} />
+                      </button>
+                      {openStudentMenu === student.id && (
+                        <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-32" onMouseLeave={() => setOpenStudentMenu(null)}>
+                          <button onClick={() => { setEditingStudent(student); setOpenStudentMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
+                          <button onClick={() => { handleDeleteStudent(student); setOpenStudentMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                        </div>
+                      )}
+                      <button onClick={() => setSelectedStudent(student)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:text-violet-600 hover:bg-violet-50 transition-colors">
+                        <ChevronRight size={18} className={isRTL ? "rotate-180" : ""} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -711,6 +870,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
            </div>
         </div>
 
+        {selectedTeacherIds.length > 0 && (
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+            <span className="text-sm font-bold text-violet-800">{selectedTeacherIds.length} معلم محدد</span>
+            <div className="flex gap-2">
+              <button onClick={() => setSelectedTeacherIds([])} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-white rounded-lg">إلغاء التحديد</button>
+              <button onClick={handleBulkDeleteTeachers} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">حذف المحدد</button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
            {teachersList.map(teacher => {
               const assignedClassDetails = CLASSES.filter(c => teacher.assignedClasses.includes(c.id));
@@ -719,6 +888,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                  <div key={teacher.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 hover:shadow-md transition-all">
                     <div className="flex justify-between items-start mb-6">
                        <div className="flex gap-4">
+                          <input type="checkbox" className="mt-1" checked={selectedTeacherIds.includes(teacher.id)} onChange={() => toggleSelectTeacher(teacher.id)} />
                           <img src={teacher.avatar} alt={teacher.name} referrerPolicy="no-referrer" className="w-16 h-16 rounded-2xl object-cover border-2 border-white shadow-sm" />
                           <div>
                              <h3 className="font-bold text-lg text-gray-900">{trName(teacher.name)}</h3>
@@ -950,6 +1120,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
        {/* EDIT TEACHER MODAL */}
        {editingTeacher && (
          <EditTeacherModal teacher={editingTeacher} onClose={() => setEditingTeacher(null)} onSubmit={handleUpdateTeacher} />
+       )}
+
+       {/* EDIT STUDENT MODAL */}
+       {editingStudent && (
+         <EditStudentModal student={editingStudent} onClose={() => setEditingStudent(null)} onSubmit={handleUpdateStudent} />
        )}
 
 

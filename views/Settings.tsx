@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Language, UserRole, SettingsTab, Course, AcademicYearConfig, Holiday, TimetableEvent, NotificationSettings, NotificationChannel, NotificationCategory, NotificationTrigger, ClassSpace, SpaceGovernance } from '../types';
 import { Button } from '../components/Button';
+import { confirmDialog } from '../components/ConfirmDialog';
+import { showToast } from '../components/Toast';
 import { 
   generateConflictFreeSchedule,
   simulateHolidayImpact,
@@ -757,7 +759,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
 
       setCourses(prev => [...newCourses, ...prev]);
       setIsBulkImportModalOpen(false);
-      alert(isRTL ? `تم استيراد ${newCourses.length} مواد بنجاح` : `Successfully imported ${newCourses.length} subjects`);
+      showToast(isRTL ? `تم استيراد ${newCourses.length} مواد بنجاح` : `Successfully imported ${newCourses.length} subjects`, 'success');
     };
     reader.readAsText(file);
   };
@@ -806,8 +808,9 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     }));
   };
 
-  const handleDeleteCourse = (id: string) => {
-    if (confirm(isRTL ? 'هل أنت متأكد من حذف هذا المقرر؟' : 'Are you sure you want to delete this course?')) {
+  const handleDeleteCourse = async (id: string) => {
+    const confirmed = await confirmDialog(isRTL ? 'هل أنت متأكد من حذف هذا المقرر؟' : 'Are you sure you want to delete this course?', isRTL ? 'حذف' : 'Delete');
+    if (confirmed) {
       setCourses(courses.filter(c => c.id !== id));
     }
   };

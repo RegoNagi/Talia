@@ -3,6 +3,7 @@ import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceSt
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
 import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
+import { confirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/Button';
 import { ClassCalendar } from './ClassCalendar';
 import { 
@@ -284,8 +285,9 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
        }
     };
 
-    const removeStudent = (studentId: string) => {
-      if (confirm('Are you sure you want to remove this student from the roster?')) {
+    const removeStudent = async (studentId: string) => {
+      const confirmed = await confirmDialog('متأكد إنك عايز تشيل الطالب ده من قائمة الفصل؟', 'شيل');
+      if (confirmed) {
         setClasses(prev => prev.map(c => 
           c.id === classData.id 
             ? { ...c, students: c.students.filter(id => id !== studentId) } 
