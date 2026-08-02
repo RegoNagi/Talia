@@ -125,7 +125,107 @@ export async function getTeachers(): Promise<Teacher[]> {
   }));
 }
 
-// بيجيب الحصص الحقيقية المُنشأة لفصل معيّن
+// بيجيب المعلمين المسجّلين فعليًا على مادة معيّنة (من جدول teacher_subjects)
+export async function getTeachersBySubject(subject: string): Promise<Teacher[]> {
+  const { data, error } = await supabase
+    .from('teacher_subjects')
+    .select(`
+      subject,
+      teachers ( id, specialization, employment_type, users ( name, email ) )
+    `)
+    .eq('subject', subject);
+
+  if (error) {
+    console.error('Error fetching teachers by subject:', error);
+    return [];
+  }
+
+  return (data || [])
+    .filter((row: any) => row.teachers)
+    .map((row: any) => ({
+      id: row.teachers.id,
+      name: row.teachers.users?.name ?? 'بدون اسم',
+      role: 'TEACHER' as any,
+      avatar: '',
+      email: row.teachers.users?.email ?? '',
+      specialization: row.teachers.specialization ?? '',
+      hiringDate: '',
+      employmentType: row.teachers.employment_type ?? 'Full-time',
+      phone: '',
+      assignedClasses: [],
+      academicLoad: 0,
+    }));
+}
+
+// بينشئ معلم حقيقي جديد (يوزر + سجل معلم + ربطه بمادته)
+export async function createTeacher(input: {
+  name: string;
+  email: string;
+  hiringDate: string;
+  employmentType: string;
+  subject: string;
+}): Promise<string | null> {
+  const { data: userRow, error: userError } = await supabase
+    .from('users')
+    .insert({ name: input.name, role: 'TEACHER', email: input.email })
+    .select('id')
+    .single();
+
+  if (userError || !userRow) {
+    console.error('Error creating teacher user:', userError);
+    return null;
+  }
+
+  const { data: teacherRow, error: teacherError } = await supabase
+    .from('teachers')
+    .insert({
+      user_id: userRow.id,
+      specialization: input.subject,
+      employment_type: input.employmentType,
+      hiring_date: input.hiringDate || null,
+    })
+    .select('id')
+    .single();
+
+  if (teacherError || !teacherRow) {
+    console.error('Error creating teacher record:', teacherError);
+    return null;
+  }
+
+  if (input.subject) {
+    const { error: subjectError } = await supabase
+      .from('teacher_subjects')
+      .insert({ teacher_id: teacherRow.id, subject: input.subject });
+    if (subjectError) console.error('Error linking teacher to subject:', subjectError);
+  }
+
+  return teacherRow.id;
+}
+
+// بيجيب سجلات الحضور المُسجّلة فعليًا في تاريخ معيّن لفصل معيّن، منظّمة حسب الحصة (أو daily لو يومي)
+export async function getAttendanceForDate(sectionId: string, date: string): Promise<Record<string, Record<string, string>>> {
+  const { data, error } = await supabase
+    .from('attendance_records')
+    .select('student_id, status, attendance_sessions!inner(section_id, date, period_id)')
+    .eq('attendance_sessions.section_id', sectionId)
+    .eq('attendance_sessions.date', date);
+
+  if (error || !data) {
+    console.error('Error fetching attendance for date:', error);
+    return {};
+  }
+
+  const statusMap: Record<string, string> = { Present: 'present', Absent: 'absent', Late: 'late', Excused: 'excused' };
+  const result: Record<string, Record<string, string>> = {};
+  (data as any[]).forEach(row => {
+    const periodKey = row.attendance_sessions.period_id || 'daily';
+    if (!result[periodKey]) result[periodKey] = {};
+    result[periodKey][row.student_id] = statusMap[row.status] || 'absent';
+  });
+  return result;
+}
+
+
 export async function getPeriods(sectionId: string): Promise<{ id: string; subject: string; day: string; startTime: string; endTime: string; teacherId: string | null }[]> {
   const { data, error } = await supabase
     .from('class_periods')

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Plus, ChevronDown } from 'lucide-react';
-import { getPeriods, createPeriod, getTeachers } from '../services/supabaseData';
+import { getPeriods, createPeriod, getTeachersBySubject, getTeachers } from '../services/supabaseData';
 import { Teacher } from '../types';
 
 const ARABIC_DAYS = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس'];
@@ -36,6 +36,7 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
   const [formTeacherId, setFormTeacherId] = useState(defaultTeacherId || '');
 
   const [realTeachers, setRealTeachers] = useState<Teacher[]>([]);
+  const [allTeachers, setAllTeachers] = useState<Teacher[]>([]);
 
   // الحصص الحقيقية بتاعة الفصل ده — بتتحمّل من قاعدة البيانات
   const [sessions, setSessions] = useState<{ id: string; subject: string; day: string; startTime: string; endTime: string; teacherId: string | null; color: string }[]>([]);
@@ -49,12 +50,25 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
 
   React.useEffect(() => {
     loadPeriods();
-    getTeachers().then(setRealTeachers);
+    getTeachers().then(setAllTeachers);
   }, [sectionId]);
 
   React.useEffect(() => {
     setFormTeacherId(defaultTeacherId || '');
   }, [defaultTeacherId]);
+
+  React.useEffect(() => {
+    if (!formSubject) { setRealTeachers([]); return; }
+    getTeachersBySubject(formSubject).then(teachers => {
+      setRealTeachers(teachers);
+      // لو المعلم الأساسي بتاع الفصل بيدرّس المادة دي، يكون هو الافتراضي — غير كده أول معلم متاح للمادة دي
+      if (defaultTeacherId && teachers.some(t => t.id === defaultTeacherId)) {
+        setFormTeacherId(defaultTeacherId);
+      } else {
+        setFormTeacherId(teachers.length > 0 ? teachers[0].id : '');
+      }
+    });
+  }, [formSubject]);
 
   const days = ARABIC_DAYS;
   const times = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00'];
@@ -64,7 +78,7 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
     blue: 'bg-violet-100 border-l-4 border-violet-600 text-violet-800',
   };
 
-  const teacherName = (id: string | null) => realTeachers.find(t => t.id === id)?.name;
+  const teacherName = (id: string | null) => allTeachers.find(t => t.id === id)?.name;
 
   const openAddModal = (day: string, time?: string) => {
     setFormDay(day);
@@ -247,9 +261,11 @@ export const ClassCalendar = ({ sectionId, defaultTeacherId }: { sectionId: stri
                   onChange={setFormTeacherId}
                   options={[{ value: '', label: 'بدون معلم محدد' }, ...realTeachers.map(t => ({ value: t.id, label: t.name }))]}
                 />
-                {defaultTeacherId && formTeacherId === defaultTeacherId && (
+                {realTeachers.length === 0 ? (
+                  <p className="text-xs text-amber-600 mt-1">مفيش معلمين مسجّلين على مادة "{formSubject}" لسه في قاعدة البيانات.</p>
+                ) : defaultTeacherId && formTeacherId === defaultTeacherId ? (
                   <p className="text-xs text-slate-400 mt-1">المعلم الأساسي المعيّن على الفصل ده — تقدر تغيّره لو الحصة دي لمعلم بديل.</p>
-                )}
+                ) : null}
               </div>
 
               <div>

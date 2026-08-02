@@ -16,7 +16,7 @@ import {
   Calendar,
   AlertCircle
 } from 'lucide-react';
-import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings } from '../services/supabaseData';
+import { getStudents, getClassSections, saveAttendanceSession, getPeriods, getAttendanceSettings, saveAttendanceSettings, getAttendanceForDate } from '../services/supabaseData';
 import { Student, ClassSection } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -77,9 +77,25 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const [attendanceSaved, setAttendanceSaved] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
 
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  const isToday = selectedDate === todayStr;
+
   // مفتاح "الحصة الحالية" اللي بيتم تسجيل الحضور تحته — في وضع "يومي" مفيش حصص، فبنستخدم مفتاح ثابت
   const activeKey = attendanceMode === 'Daily' ? 'daily' : (selectedPeriodId || '');
   const currentAttendance = attendanceData[activeKey] || {};
+
+  const goPrevDay = () => {
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() - 1);
+    setSelectedDate(d.toISOString().slice(0, 10));
+  };
+  const goNextDay = () => {
+    if (isToday) return; // مينفعش نتحرك لقدام أكتر من النهاردة، لحد ما اليوم الجديد يبدأ فعليًا
+    const d = new Date(selectedDate);
+    d.setDate(d.getDate() + 1);
+    setSelectedDate(d.toISOString().slice(0, 10));
+  };
 
   React.useEffect(() => {
     getClassSections().then(setRealClasses);
@@ -100,6 +116,13 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
     }
   }, [selectedClass, attendanceMode]);
 
+  // تحميل بيانات الحضور المسجّلة فعليًا (أو الفاضية) لليوم المختار — بيحل محل أي بيانات قديمة
+  React.useEffect(() => {
+    if (selectedClass) {
+      getAttendanceForDate(selectedClass, selectedDate).then(setAttendanceData);
+    }
+  }, [selectedClass, selectedDate]);
+
   const handleSaveSettings = async () => {
     const ok = await saveAttendanceSettings(attendanceMode, lateThreshold);
     if (ok) {
@@ -110,6 +133,10 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   const saveAttendance = async () => {
+    if (!isToday) {
+      alert('مينفعش تسجّل أو تعدّل حضور يوم فات أو يوم لسه ماجاش.');
+      return;
+    }
     if (!selectedClass) return;
     if (attendanceMode === 'Period' && !selectedPeriodId) {
       alert('اختار حصة الأول قبل ما تحفظ الحضور.');
@@ -125,7 +152,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
     const periodSubject = attendanceMode === 'Period' ? realPeriods.find(p => p.id === selectedPeriodId)?.subject : 'يوم كامل';
     const sessionId = await saveAttendanceSession({
       sectionId: selectedClass,
-      date: new Date().toISOString().slice(0, 10),
+      date: selectedDate,
       subject: periodSubject,
       periodId: attendanceMode === 'Period' ? selectedPeriodId : null,
       records,
@@ -213,6 +240,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   const filteredGradeData = gradeData.filter(g => filterGrade === 'جميع الصفوف' || g.name === filterGrade);
 
   const handleStatusChange = (studentId: string, status: string) => {
+    if (!isToday) return;
     setAttendanceData(prev => ({
       ...prev,
       [activeKey]: { ...(prev[activeKey] || {}), [studentId]: status },
@@ -220,6 +248,7 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
   };
 
   const markAllPresent = () => {
+    if (!isToday) return;
     const classStudentIds = realClasses.find(c => c.id === selectedClass)?.students || [];
     const updated: Record<string, string> = { ...(attendanceData[activeKey] || {}) };
     realStudents.filter(s => classStudentIds.includes(s.id)).forEach(student => {
@@ -673,8 +702,20 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                   </button>
                   <div>
                     <h2 className="text-2xl font-bold text-slate-900">{realClasses.find(c => c.id === selectedClass)?.name}</h2>
-                    <p className="text-slate-500">تسجيل الحضور {attendanceMode === 'Period' ? `لـ${realPeriods.find(p => p.id === selectedPeriodId)?.subject || 'حصة'}` : '(يومي)'} • {new Date().toLocaleDateString('ar-EG')}</p>
+                    <p className="text-slate-500">تسجيل الحضور {attendanceMode === 'Period' ? `لـ${realPeriods.find(p => p.id === selectedPeriodId)?.subject || 'حصة'}` : '(يومي)'}</p>
                   </div>
+                </div>
+
+                <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-2 py-1.5">
+                  <button onClick={goPrevDay} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors" title="اليوم السابق">
+                    <ChevronDown size={18} className="rotate-90 text-slate-600" />
+                  </button>
+                  <span className="text-sm font-bold text-slate-800 min-w-[110px] text-center">
+                    {isToday ? 'النهاردة' : new Date(selectedDate).toLocaleDateString('ar-EG', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </span>
+                  <button onClick={goNextDay} disabled={isToday} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed" title="اليوم التالي">
+                    <ChevronDown size={18} className="-rotate-90 text-slate-600" />
+                  </button>
                 </div>
                 
                 <div className="flex items-center gap-3">
@@ -688,14 +729,20 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                     />
                     <Search className="absolute left-3 top-2.5 text-slate-400" size={16} />
                   </div>
-                  <Button onClick={markAllPresent} className="bg-green-600 hover:bg-green-700 text-white">
+                  <Button onClick={markAllPresent} disabled={!isToday} className="bg-green-600 hover:bg-green-700 text-white disabled:opacity-40">
                     <CheckCircle2 size={16} className="mr-2" /> تحديد الكل كحاضر
                   </Button>
-                  <Button onClick={saveAttendance} disabled={isSavingAttendance} className="bg-violet-600 hover:bg-violet-700 text-white">
-                    {isSavingAttendance ? 'جاري الحفظ...' : attendanceSaved ? 'تم الحفظ ✓' : 'حفظ الحضور'}
+                  <Button onClick={saveAttendance} disabled={isSavingAttendance || !isToday} className="bg-violet-600 hover:bg-violet-700 text-white disabled:opacity-40">
+                    {isSavingAttendance ? 'جاري الحفظ...' : attendanceSaved ? 'تم الحفظ ✓' : !isToday ? 'للعرض فقط' : 'حفظ الحضور'}
                   </Button>
                 </div>
               </div>
+
+              {!isToday && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-xl px-4 py-3">
+                  إنت بتعرض سجل حضور {new Date(selectedDate) < new Date(todayStr) ? 'يوم فات' : 'يوم لسه ما جاش'} — التسجيل والتعديل متاح بس للنهاردة.
+                </div>
+              )}
 
               {/* Period Selector Bar (وضع "حسب الحصة" فقط) — الحصص دي بتتنشئ من تاب "الجدول الزمني" جوه الفصل */}
               {attendanceMode === 'Period' && (
@@ -741,24 +788,27 @@ export const Attendance: React.FC<AttendanceProps> = ({ role, language, user }) 
                       <div className="flex bg-gray-50 p-1 rounded-xl">
                         <button
                           onClick={() => handleStatusChange(student.id, 'present')}
-                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                            status === 'present' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'
+                          disabled={!isToday}
+                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
+                            status === 'present' ? 'bg-green-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}
                         >
                           {status === 'present' && <CheckCircle2 size={14} />} Present
                         </button>
                         <button
                           onClick={() => handleStatusChange(student.id, 'absent')}
-                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                            status === 'absent' ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'
+                          disabled={!isToday}
+                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
+                            status === 'absent' ? 'bg-red-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}
                         >
                           {status === 'absent' && <XCircle size={14} />} Absent
                         </button>
                         <button
                           onClick={() => handleStatusChange(student.id, 'late')}
-                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 ${
-                            status === 'late' ? 'bg-yellow-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200'
+                          disabled={!isToday}
+                          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all flex items-center justify-center gap-1 disabled:cursor-not-allowed ${
+                            status === 'late' ? 'bg-yellow-500 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-200 disabled:hover:bg-transparent'
                           }`}
                         >
                           {status === 'late' && <Clock size={14} />} Late

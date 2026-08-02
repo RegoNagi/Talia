@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { MOCK_TEACHERS, MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents } from '../services/supabaseData';
+import { MOCK_ADMINS, MOCK_PARENTS, CLASSES } from '../services/mockData';
+import { getStudents, getTeachers, createTeacher } from '../services/supabaseData';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
 import { ParentsManagement } from './ParentsManagement';
 import { StudentProfile } from './StudentProfile';
@@ -102,8 +102,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   const [studentsList, setStudentsList] = useState<Student[]>([]);
   const [studentsLoading, setStudentsLoading] = useState<boolean>(true);
   const [parentsList, setParentsList] = useState<Parent[]>(MOCK_PARENTS);
-  const [teachersList, setTeachersList] = useState<Teacher[]>(MOCK_TEACHERS);
+  const [teachersList, setTeachersList] = useState<Teacher[]>([]);
+  const [teachersLoading, setTeachersLoading] = useState<boolean>(true);
   const [adminsList, setAdminsList] = useState<Admin[]>(MOCK_ADMINS);
+
+  const refreshTeachers = () => {
+    setTeachersLoading(true);
+    getTeachers().then((data) => {
+      setTeachersList(data);
+      setTeachersLoading(false);
+    });
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -114,6 +123,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         setStudentsLoading(false);
       }
     });
+    refreshTeachers();
     return () => { isMounted = false; };
   }, []);
 
@@ -136,7 +146,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
      email: '', 
      hiringDate: new Date().toISOString().split('T')[0], 
      type: 'Full-time', 
-     subject: 'Mathematics'
+     subject: 'رياضيات'
   });
 
   // Admin Form
@@ -182,23 +192,26 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       setNewStudent({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'Grade 10', dob: '' });
   };
 
-  const handleCreateTeacher = () => {
-      const teacher: Teacher = {
-          id: `t-${Date.now()}`,
-          name: newTeacher.name || 'New Teacher',
-          role: UserRole.TEACHER,
-          avatar: `https://ui-avatars.com/api/?name=${newTeacher.name}&background=random`,
-          email: newTeacher.email,
-          specialization: newTeacher.subject,
-          hiringDate: newTeacher.hiringDate,
-          employmentType: newTeacher.type as any,
-          phone: '',
-          assignedClasses: [],
-          academicLoad: 0
-      };
-      setTeachersList([teacher, ...teachersList]);
-      setIsAddTeacherOpen(false);
-      setNewTeacher({ name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time', subject: 'Mathematics' });
+  const [isCreatingTeacher, setIsCreatingTeacher] = useState(false);
+
+  const handleCreateTeacher = async () => {
+      if (!newTeacher.name.trim()) return;
+      setIsCreatingTeacher(true);
+      const id = await createTeacher({
+        name: newTeacher.name,
+        email: newTeacher.email,
+        hiringDate: newTeacher.hiringDate,
+        employmentType: newTeacher.type,
+        subject: newTeacher.subject,
+      });
+      setIsCreatingTeacher(false);
+      if (id) {
+        refreshTeachers();
+        setIsAddTeacherOpen(false);
+        setNewTeacher({ name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time', subject: 'رياضيات' });
+      } else {
+        alert('حصل خطأ أثناء إنشاء المعلم. تأكد إنك شغّلت كود إضافة عمود hiring_date في Supabase.');
+      }
   };
 
   const handleCreateAdmin = () => {
@@ -803,19 +816,19 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
                         onChange={(e) => setNewTeacher({...newTeacher, subject: e.target.value})}
                         className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white"
                       >
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Science">Science</option>
-                        <option value="English">English</option>
-                        <option value="Arabic">Arabic</option>
-                        <option value="Physics">Physics</option>
-                        <option value="History">History</option>
+                        <option value="رياضيات">رياضيات</option>
+                        <option value="علوم">علوم</option>
+                        <option value="لغة إنجليزية">لغة إنجليزية</option>
+                        <option value="لغة عربية">لغة عربية</option>
+                        <option value="تاريخ">تاريخ</option>
+                        <option value="فنون">فنون</option>
                       </select>
                    </div>
                 </div>
 
                 <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
                    <Button variant="secondary" className="flex-1" onClick={() => setIsAddTeacherOpen(false)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
-                   <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700" onClick={handleCreateTeacher}>Create Teacher</Button>
+                   <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={isCreatingTeacher} onClick={handleCreateTeacher}>{isCreatingTeacher ? 'جاري الإنشاء...' : 'Create Teacher'}</Button>
                 </div>
              </div>
           </div>
