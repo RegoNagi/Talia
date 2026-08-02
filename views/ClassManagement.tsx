@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem } from '../types';
-import { CLASSES, STUDENTS, MOCK_ATTENDANCE_SESSION, MOCK_TEACHERS } from '../services/mockData';
+import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
+import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
+import { getStudents, getClassSections, getTeachers, createClassSection } from '../services/supabaseData';
 import { Button } from '../components/Button';
 import { ClassCalendar } from './ClassCalendar';
 import { 
@@ -167,10 +168,27 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
   // Navigation State
   const [viewState, setViewState] = useState<'list' | 'create' | 'class-detail' | 'scanner'>('list');
   const [activeClass, setActiveClass] = useState<ClassSection | null>(null);
-  const [classes, setClasses] = useState<ClassSection[]>(CLASSES);
+  const [classes, setClasses] = useState<ClassSection[]>([]);
+  const [classesLoading, setClassesLoading] = useState<boolean>(true);
+  const [realStudents, setRealStudents] = useState<Student[]>([]);
+  const [realTeachers, setRealTeachers] = useState<Teacher[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'attendance'>('name');
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const refreshClasses = () => {
+    setClassesLoading(true);
+    getClassSections().then((data) => {
+      setClasses(data);
+      setClassesLoading(false);
+    });
+  };
+
+  useEffect(() => {
+    refreshClasses();
+    getStudents().then(setRealStudents);
+    getTeachers().then(setRealTeachers);
+  }, []);
 
   // Update activeClass when classes state changes
   useEffect(() => {
@@ -192,7 +210,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState('Today, Apr 13');
 
-    const enrolledStudents = STUDENTS.filter(s => classData.students.includes(s.id));
+    const enrolledStudents = realStudents.filter(s => classData.students.includes(s.id));
     
     const sortedStudents = [...enrolledStudents].sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
@@ -582,7 +600,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                    <Users className="absolute left-3 top-3.5 text-gray-400" size={18} />
                  </div>
                  <div className="max-h-60 overflow-y-auto space-y-2">
-                   {STUDENTS.filter(s => 
+                   {realStudents.filter(s => 
                      !classData.students.includes(s.id) && 
                      (s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase()))
                    ).map(student => (
@@ -630,6 +648,27 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
       students: [] as string[],
     });
 
+    const [isCreatingClass, setIsCreatingClass] = useState(false);
+
+    const handleConfirmCreate = async () => {
+      setIsCreatingClass(true);
+      const newId = await createClassSection({
+        name: classData.name || 'فصل بدون اسم',
+        gradeLevel: classData.grade,
+        teacherId: classData.teachers['MainTeacher'],
+        academicYear: '2025/2026',
+        capacity: classData.capacity,
+        studentIds: classData.students,
+      });
+      setIsCreatingClass(false);
+      if (newId) {
+        refreshClasses();
+        setViewState('list');
+      } else {
+        alert('حصل خطأ أثناء إنشاء الفصل. تأكد إن جدول class_sections فيه عمود capacity، وحاول تاني.');
+      }
+    };
+
     const [activeSubjectForTeacher, setActiveSubjectForTeacher] = useState<string | null>(null);
     const [teacherSearchQuery, setTeacherSearchQuery] = useState('');
     const [studentSearchQuery, setStudentSearchQuery] = useState('');
@@ -665,7 +704,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     }
 
     if (viewState === 'create') {
-      const filteredStudents = STUDENTS.filter(s => 
+      const filteredStudents = realStudents.filter(s => 
         s.grade === classData.grade &&
         (s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
          s.id.toLowerCase().includes(studentSearchQuery.toLowerCase()))
@@ -751,7 +790,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                               </div>
                               {classData.teachers['MainTeacher'] ? (
                                 (() => {
-                                  const t = MOCK_TEACHERS.find(x => x.id === classData.teachers['MainTeacher']);
+                                  const t = realTeachers.find(x => x.id === classData.teachers['MainTeacher']);
                                   if (!t) return null;
                                   return (
                                     <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -789,7 +828,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                               </div>
                               {classData.teachers['AssistantTeacher'] ? (
                                 (() => {
-                                  const t = MOCK_TEACHERS.find(x => x.id === classData.teachers['AssistantTeacher']);
+                                  const t = realTeachers.find(x => x.id === classData.teachers['AssistantTeacher']);
                                   if (!t) return null;
                                   return (
                                     <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-100">
@@ -858,7 +897,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                           
                           <div className="overflow-y-auto flex-1 p-2">
                             {(() => {
-                              const filteredTeachers = MOCK_TEACHERS.filter(t => 
+                              const filteredTeachers = realTeachers.filter(t => 
                                 (t.specialization.includes(activeSubjectForTeacher!) || ['English', 'Arabic', 'MainTeacher', 'AssistantTeacher'].includes(activeSubjectForTeacher!)) &&
                                 (t.name.toLowerCase().includes(teacherSearchQuery.toLowerCase()) || 
                                  t.id.toLowerCase().includes(teacherSearchQuery.toLowerCase()))
@@ -1011,8 +1050,8 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                        <div className="flex justify-between text-sm"><span className="text-gray-500">المعلمون المعينون</span><span className="font-bold">{Object.keys(classData.teachers).length}</span></div>
                        <div className="flex justify-between text-sm"><span className="text-gray-500">الطلاب المسجلين</span><span className="font-bold">{classData.students.length}</span></div>
                     </div>
-                    <Button onClick={() => setViewState('list')} className="w-full max-w-xs mx-auto text-lg py-3 bg-violet-600 hover:bg-violet-700">
-                       تأكيد وإنشاء الفصل
+                    <Button onClick={handleConfirmCreate} disabled={isCreatingClass} className="w-full max-w-xs mx-auto text-lg py-3 bg-violet-600 hover:bg-violet-700">
+                       {isCreatingClass ? 'جاري الإنشاء...' : 'تأكيد وإنشاء الفصل'}
                     </Button>
                  </div>
                )}
@@ -1174,6 +1213,9 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
            </div>
          )}
 
+          {classesLoading && (
+            <div className="text-center py-10 text-gray-400">جاري تحميل الفصول من قاعدة البيانات...</div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {classes.map((cls) => (
                <div key={cls.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
