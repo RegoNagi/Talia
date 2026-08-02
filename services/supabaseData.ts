@@ -178,7 +178,7 @@ export async function createTeacher(input: {
 }): Promise<string | null> {
   const { data: userRow, error: userError } = await supabase
     .from('users')
-    .insert({ name: input.name, role: 'TEACHER', email: input.email })
+    .insert({ name: input.name, role: 'TEACHER', email: input.email?.trim() ? input.email.trim() : null })
     .select('id')
     .single();
 
