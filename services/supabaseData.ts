@@ -601,3 +601,51 @@ export async function createClassSection(input: {
 
   return sectionId;
 }
+
+// بيعدّل بيانات فصل موجود
+export async function updateClassSection(input: {
+  sectionId: string;
+  name: string;
+  gradeLevel: string;
+  teacherId?: string | null;
+  academicYear?: string;
+  capacity?: number;
+}): Promise<boolean> {
+  const { error } = await supabase
+    .from('class_sections')
+    .update({
+      name: input.name,
+      grade_level: input.gradeLevel,
+      teacher_id: input.teacherId || null,
+      academic_year: input.academicYear || null,
+      capacity: input.capacity ?? 25,
+    })
+    .eq('id', input.sectionId);
+
+  if (error) {
+    console.error('Error updating class section:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح فصل واحد (بيمسح معاه تلقائيًا التسجيلات والحصص وجلسات الحضور بتاعته بسبب CASCADE)
+export async function deleteClassSection(sectionId: string): Promise<boolean> {
+  const { error } = await supabase.from('class_sections').delete().eq('id', sectionId);
+  if (error) {
+    console.error('Error deleting class section:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح مجموعة فصول دفعة واحدة
+export async function bulkDeleteClassSections(sectionIds: string[]): Promise<boolean> {
+  if (sectionIds.length === 0) return true;
+  const { error } = await supabase.from('class_sections').delete().in('id', sectionIds);
+  if (error) {
+    console.error('Error bulk deleting class sections:', error);
+    return false;
+  }
+  return true;
+}

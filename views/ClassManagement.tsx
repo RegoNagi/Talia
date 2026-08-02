@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
-import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection } from '../services/supabaseData';
+import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection, updateClassSection, deleteClassSection, bulkDeleteClassSections } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/Button';
@@ -160,6 +160,70 @@ const AcademicPlanAccordion = () => {
   );
 };
 
+const GRADE_OPTIONS_CM = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+
+const EditClassModal: React.FC<{
+  cls: ClassSection;
+  teachers: Teacher[];
+  onClose: () => void;
+  onSubmit: (data: any) => Promise<boolean>;
+}> = ({ cls, teachers, onClose, onSubmit }) => {
+  const [form, setForm] = useState({
+    name: cls.name || '',
+    gradeLevel: cls.gradeLevel || GRADE_OPTIONS_CM[0],
+    teacherId: cls.teacherId || '',
+    academicYear: cls.academicYear || '',
+    capacity: (cls as any).capacity || 25,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return;
+    setIsSubmitting(true);
+    const ok = await onSubmit(form);
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl animate-fadeIn">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الفصل</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">اسم الفصل</label>
+            <input type="text" value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+            <select value={form.gradeLevel} onChange={(e) => setForm({...form, gradeLevel: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+              {GRADE_OPTIONS_CM.map(g => <option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">المعلم الرئيسي</label>
+            <select value={form.teacherId} onChange={(e) => setForm({...form, teacherId: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+              <option value="">بدون معلم محدد</option>
+              {teachers.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">السعة الاستيعابية</label>
+            <input type="number" value={form.capacity} onChange={(e) => setForm({...form, capacity: parseInt(e.target.value) || 0})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+          </div>
+        </div>
+        <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" className="flex-1 bg-violet-600 hover:bg-violet-700" disabled={isSubmitting} onClick={handleSubmit}>{isSubmitting ? 'جاري الحفظ...' : 'حفظ التعديلات'}</Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 interface ClassManagementProps {
   role: UserRole;
   language: Language;
@@ -184,6 +248,58 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
       setClasses(data);
       setClassesLoading(false);
     });
+  };
+
+  // تعديل وحذف الفصول
+  const [editingClass, setEditingClass] = useState<ClassSection | null>(null);
+  const [openClassMenu, setOpenClassMenu] = useState<string | null>(null);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+  const toggleSelectClass = (id: string) => {
+    setSelectedClassIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const handleUpdateClass = async (form: any): Promise<boolean> => {
+    if (!editingClass) return false;
+    const ok = await updateClassSection({
+      sectionId: editingClass.id,
+      name: form.name,
+      gradeLevel: form.gradeLevel,
+      teacherId: form.teacherId,
+      academicYear: form.academicYear,
+      capacity: form.capacity,
+    });
+    if (ok) {
+      refreshClasses();
+      showToast('تم تعديل بيانات الفصل بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء تعديل الفصل.', 'error');
+    }
+    return ok;
+  };
+
+  const handleDeleteClass = async (cls: ClassSection) => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح فصل "${cls.name}"؟ هيتمسح معاه كل تسجيلات الطلاب والحصص وسجلات الحضور المرتبطة بيه. الإجراء ده مينفعش يترجع.`, 'حذف');
+    if (!confirmed) return;
+    const ok = await deleteClassSection(cls.id);
+    if (ok) {
+      refreshClasses();
+      showToast('تم حذف الفصل.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء حذف الفصل.', 'error');
+    }
+  };
+
+  const handleBulkDeleteClasses = async () => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح ${selectedClassIds.length} فصل؟ الإجراء ده مينفعش يترجع.`, 'حذف الكل');
+    if (!confirmed) return;
+    const ok = await bulkDeleteClassSections(selectedClassIds);
+    if (ok) {
+      refreshClasses();
+      setSelectedClassIds([]);
+      showToast('تم حذف الفصول المحددة.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف الجماعي.', 'error');
+    }
   };
 
   useEffect(() => {
@@ -1280,14 +1396,35 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
           {classesLoading && (
             <div className="text-center py-10 text-gray-400">جاري تحميل الفصول من قاعدة البيانات...</div>
           )}
+          {selectedClassIds.length > 0 && (
+            <div className="bg-violet-50 border border-violet-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+              <span className="text-sm font-bold text-violet-800">{selectedClassIds.length} فصل محدد</span>
+              <div className="flex gap-2">
+                <button onClick={() => setSelectedClassIds([])} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-white rounded-lg">إلغاء التحديد</button>
+                <button onClick={handleBulkDeleteClasses} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">حذف المحدد</button>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {classes.map((cls) => (
                <div key={cls.id} className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-md transition-all group relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-violet-500 to-violet-600"></div>
                   <div className="flex justify-between items-start mb-4">
-                     <div>
-                        <h3 className="text-2xl font-bold text-gray-900">{cls.name}</h3>
-                        <p className="text-sm text-gray-500">{cls.gradeLevel}</p>
+                     <div className="flex items-start gap-3">
+                        <input type="checkbox" className="mt-1.5" checked={selectedClassIds.includes(cls.id)} onChange={() => toggleSelectClass(cls.id)} />
+                        <div>
+                           <h3 className="text-2xl font-bold text-gray-900">{cls.name}</h3>
+                           <p className="text-sm text-gray-500">{cls.gradeLevel}</p>
+                        </div>
+                     </div>
+                     <div className="relative">
+                       <button onClick={() => setOpenClassMenu(openClassMenu === cls.id ? null : cls.id)} className="text-gray-300 hover:text-gray-600"><MoreVertical size={20} /></button>
+                       {openClassMenu === cls.id && (
+                         <div className="absolute left-0 top-full mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 w-32" onMouseLeave={() => setOpenClassMenu(null)}>
+                           <button onClick={() => { setEditingClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">تعديل</button>
+                           <button onClick={() => { handleDeleteClass(cls); setOpenClassMenu(null); }} className="w-full text-right px-4 py-2 text-sm text-red-600 hover:bg-red-50">حذف</button>
+                         </div>
+                       )}
                      </div>
                   </div>
                   
@@ -1546,6 +1683,9 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
   return (
     <div dir="rtl" className="h-full w-full">
       {role === UserRole.ADMIN ? <AdminView /> : role === UserRole.STUDENT ? <StudentView /> : <TeacherView />}
+      {editingClass && (
+        <EditClassModal cls={editingClass} teachers={realTeachers} onClose={() => setEditingClass(null)} onSubmit={handleUpdateClass} />
+      )}
     </div>
   );
 };
