@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Language } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
 import { Button } from '../components/Button';
+import { LessonPlanner } from './LessonPlanner';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import {
@@ -40,8 +41,6 @@ import {
 interface CurriculumProps {
   language: Language;
   permissions?: string[];
-  onOpenLessonPlan?: (planId: string, grade: string, subject: string) => void;
-  restoreContext?: { grade: string; subject: string } | null;
 }
 
 const GRADE_LEVELS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
@@ -96,13 +95,14 @@ const AddSubjectModal: React.FC<{ grade: string; onClose: () => void; onSubmit: 
   );
 };
 
-export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [], onOpenLessonPlan, restoreContext }) => {
+export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [] }) => {
   const isRTL = language === Language.AR;
   const canEditCurriculum = permissions.length === 0 || permissions.includes('curriculum_edit');
 
-  const [selectedGrade, setSelectedGrade] = useState<string | null>(() => restoreContext?.grade || null);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(() => restoreContext?.subject || null);
-  const [activeSubjectTab, setActiveSubjectTab] = useState<'resources' | 'schedule' | 'plans'>(() => restoreContext ? 'plans' : 'schedule');
+  const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+  const [activeSubjectTab, setActiveSubjectTab] = useState<'resources' | 'schedule' | 'plans'>('schedule');
+  const [previewingPlanId, setPreviewingPlanId] = useState<string | null>(null);
 
   const [subjectsByGrade, setSubjectsByGrade] = useState<Record<string, { subject: string; code: string; nameEn: string; department: string }[]>>({});
   const [loadingSubjects, setLoadingSubjects] = useState(true);
@@ -437,6 +437,17 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     s.subject.toLowerCase().includes(subjectSearchQuery.toLowerCase()) ||
     s.department?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
   );
+
+  if (previewingPlanId) {
+    return (
+      <LessonPlanner
+        language={language}
+        permissions={permissions}
+        editContext={{ mode: 'view', planId: previewingPlanId }}
+        onExitContext={() => setPreviewingPlanId(null)}
+      />
+    );
+  }
 
   if (!loadingAcademicSettings && !academicSettings) {
     return (
@@ -945,7 +956,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                     <span className="flex items-center gap-1"><Clock size={14} /> {parsed.blocks?.length || 0} عناصر</span>
                                   </div>
                                   <button
-                                    onClick={() => onOpenLessonPlan?.(p.id, selectedGrade!, selectedSubject!)}
+                                    onClick={() => setPreviewingPlanId(p.id)}
                                     className="text-xs font-bold text-violet-600 hover:underline flex items-center gap-1"
                                   >
                                     معاينة →
