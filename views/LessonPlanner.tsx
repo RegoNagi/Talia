@@ -272,6 +272,19 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   };
 
   const currentBlocks = activeTab === 'ai' ? aiBlocks : manualBlocks;
+  const setCurrentBlocks = activeTab === 'ai' ? setAiBlocks : setManualBlocks;
+
+  const updateBlockField = (blockId: string, field: string, value: string) => {
+    setCurrentBlocks((prev: any[]) => prev.map(b => b.id === blockId ? { ...b, [field]: value } : b));
+  };
+
+  const updateTimelineItemField = (blockId: string, idx: number, field: string, value: string) => {
+    setCurrentBlocks((prev: any[]) => prev.map(b => {
+      if (b.id !== blockId || b.type !== 'timeline') return b;
+      const items = b.items.map((it: any, i: number) => (i === idx ? { ...it, [field]: value } : it));
+      return { ...b, items };
+    }));
+  };
 
   const renderIcon = (type: string) => {
     switch (type) {
@@ -547,6 +560,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                   <h3 
                     contentEditable={!isReadOnly} 
                     suppressContentEditableWarning
+                    onBlur={(e) => updateBlockField(block.id, 'title', e.currentTarget.textContent || block.title)}
                     className="text-lg font-bold text-purple-900 flex items-center gap-2 mb-4 outline-none focus:bg-purple-50 rounded-lg p-1 -ml-1 transition-colors"
                   >
                     <span contentEditable={false}>{renderIcon(block.type)}</span>
@@ -560,6 +574,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                            <div 
                              contentEditable={!isReadOnly} 
                              suppressContentEditableWarning 
+                             onBlur={(e) => updateTimelineItemField(block.id, idx, 'time', e.currentTarget.textContent || item.time)}
                              className="w-16 h-8 shrink-0 flex items-center justify-center bg-white rounded-lg border border-gray-200 text-xs font-bold text-gray-500 shadow-none outline-none focus:ring-1 focus:ring-purple-400 focus:border-purple-400"
                            >
                               {item.time}
@@ -568,6 +583,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                               <h4 
                                 contentEditable={!isReadOnly} 
                                 suppressContentEditableWarning 
+                                onBlur={(e) => updateTimelineItemField(block.id, idx, 'title', e.currentTarget.textContent || item.title)}
                                 className="font-bold text-gray-900 text-[15px] outline-none hover:bg-gray-100 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded p-1 -ml-1 transition-all"
                               >
                                 {item.title}
@@ -575,6 +591,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                               <p 
                                 contentEditable={!isReadOnly} 
                                 suppressContentEditableWarning 
+                                onBlur={(e) => updateTimelineItemField(block.id, idx, 'desc', e.currentTarget.textContent || item.desc)}
                                 className="text-[14px] text-gray-600 mt-1.5 leading-relaxed outline-none hover:bg-gray-100 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded p-1 -ml-1 transition-all"
                               >
                                 {item.desc}
@@ -599,6 +616,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                     <div 
                       contentEditable={!isReadOnly} 
                       suppressContentEditableWarning 
+                      onBlur={(e) => updateBlockField(block.id, 'rawHtml', e.currentTarget.innerHTML)}
                       className="pr-4 text-gray-700 outline-none hover:bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded-xl p-3 transition-all min-h-[3rem] shadow-none"
                       dangerouslySetInnerHTML={{ __html: block.rawHtml }} 
                     />

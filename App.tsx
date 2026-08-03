@@ -47,6 +47,7 @@ const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.AR);
   const [activeView, setActiveView] = useState('moe-dashboard');
   const [lessonPlanContext, setLessonPlanContext] = useState<{ mode: 'edit' | 'view'; planId: string; returnView: string } | null>(null);
+  const [curriculumRestoreContext, setCurriculumRestoreContext] = useState<{ grade: string; subject: string } | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedNav, setExpandedNav] = useState<Record<string, boolean>>({
     'moe-dashboard': true
@@ -350,7 +351,7 @@ const App: React.FC = () => {
       case 'curriculum':
         return <CurriculumHub language={language} onNavigate={setActiveView} />;
       case 'curr-setup':
-        return <Curriculum language={language} permissions={userPermissions} onOpenLessonPlan={(planId) => { setLessonPlanContext({ planId, mode: 'view', returnView: 'curriculum' }); setActiveView('lessons-planner'); }} />;
+        return <Curriculum language={language} permissions={userPermissions} restoreContext={curriculumRestoreContext} onOpenLessonPlan={(planId, grade, subject) => { setCurriculumRestoreContext({ grade, subject }); setLessonPlanContext({ planId, mode: 'view', returnView: 'curriculum' }); setActiveView('lessons-planner'); }} />;
       case 'gradebook':
         return <Gradebook role={user.role} language={language} permissions={userPermissions} />;
       case 'analytics':

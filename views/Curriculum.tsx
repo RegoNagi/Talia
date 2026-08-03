@@ -40,7 +40,8 @@ import {
 interface CurriculumProps {
   language: Language;
   permissions?: string[];
-  onOpenLessonPlan?: (planId: string) => void;
+  onOpenLessonPlan?: (planId: string, grade: string, subject: string) => void;
+  restoreContext?: { grade: string; subject: string } | null;
 }
 
 const GRADE_LEVELS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
@@ -95,7 +96,7 @@ const AddSubjectModal: React.FC<{ grade: string; onClose: () => void; onSubmit: 
   );
 };
 
-export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [], onOpenLessonPlan }) => {
+export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [], onOpenLessonPlan, restoreContext }) => {
   const isRTL = language === Language.AR;
   const canEditCurriculum = permissions.length === 0 || permissions.includes('curriculum_edit');
 
@@ -148,6 +149,15 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       setAcademicSettings(s);
       setLoadingAcademicSettings(false);
     });
+  }, []);
+
+  useEffect(() => {
+    if (restoreContext) {
+      setSelectedGrade(restoreContext.grade);
+      setSelectedSubject(restoreContext.subject);
+      setActiveSubjectTab('plans');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectSystem = async (systemId: string) => {
@@ -944,7 +954,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                     <span className="flex items-center gap-1"><Clock size={14} /> {parsed.blocks?.length || 0} عناصر</span>
                                   </div>
                                   <button
-                                    onClick={() => onOpenLessonPlan?.(p.id)}
+                                    onClick={() => onOpenLessonPlan?.(p.id, selectedGrade!, selectedSubject!)}
                                     className="text-xs font-bold text-violet-600 hover:underline flex items-center gap-1"
                                   >
                                     معاينة →
