@@ -1052,3 +1052,36 @@ export async function removeEnrollment(studentId: string, sectionId: string): Pr
   }
   return true;
 }
+
+// بيعدّل بيانات نظام درجات موجود (المادة، الصفوف، درجة النجاح، أوزان الفئات)
+export async function updateGradebookConfig(input: {
+  configId: string;
+  subjectName: string;
+  grades: string[];
+  passingScore: number;
+  categoryWeights: Record<string, number>;
+}): Promise<boolean> {
+  const { error: configError } = await supabase
+    .from('gradebook_configs')
+    .update({
+      subject_name: input.subjectName,
+      passing_score: input.passingScore,
+      category_weights: input.categoryWeights,
+    })
+    .eq('id', input.configId);
+  if (configError) {
+    console.error('Error updating gradebook config:', configError);
+    return false;
+  }
+
+  await supabase.from('gradebook_config_grades').delete().eq('config_id', input.configId);
+  if (input.grades.length > 0) {
+    const rows = input.grades.map(g => ({ config_id: input.configId, grade: g }));
+    const { error } = await supabase.from('gradebook_config_grades').insert(rows);
+    if (error) {
+      console.error('Error re-linking gradebook config grades:', error);
+      return false;
+    }
+  }
+  return true;
+}
