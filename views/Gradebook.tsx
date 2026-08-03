@@ -54,109 +54,6 @@ interface GradebookProps {
 
 const GRADE_OPTIONS_GB = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
 
-const CreateGradebookConfigModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
-  const [form, setForm] = useState({
-    subjectName: '',
-    grades: [] as string[],
-    passingScore: 60,
-    categoryWeights: { 'الاختبارات القصيرة': 20, 'الواجبات': 20, 'المشاريع': 20, 'الاختبار النهائي': 40 } as Record<string, number>,
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const toggleGrade = (grade: string) => {
-    setForm(prev => ({ ...prev, grades: prev.grades.includes(grade) ? prev.grades.filter(g => g !== grade) : [...prev.grades, grade] }));
-  };
-
-  const totalWeight = Object.values(form.categoryWeights).reduce((a, b) => a + b, 0);
-
-  const handleSubmit = async () => {
-    if (!form.subjectName.trim() || form.grades.length === 0) return;
-    setIsSubmitting(true);
-    const ok = await onSubmit(form);
-    setIsSubmitting(false);
-    if (ok) onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 max-h-[90vh] overflow-y-auto">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <h3 className="text-xl font-bold text-gray-900">إنشاء نظام درجات جديد</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><XIcon size={20} /></button>
-        </div>
-        <div className="p-6 space-y-5">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">اسم المادة</label>
-            <input
-              type="text"
-              placeholder="مثال: الرياضيات"
-              value={form.subjectName}
-              onChange={(e) => setForm({ ...form, subjectName: e.target.value })}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف المشتركة في نفس نظام الدرجات ده (اختيار متعدد)</label>
-            <div className="flex flex-wrap gap-2">
-              {GRADE_OPTIONS_GB.map(grade => (
-                <button
-                  type="button"
-                  key={grade}
-                  onClick={() => toggleGrade(grade)}
-                  className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${
-                    form.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {grade}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">درجة النجاح</label>
-            <input
-              type="number"
-              value={form.passingScore}
-              onChange={(e) => setForm({ ...form, passingScore: Number(e.target.value) })}
-              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium"
-            />
-          </div>
-          <div>
-            <div className="flex justify-between items-center mb-2">
-              <label className="block text-sm font-bold text-gray-700">أوزان فئات التقييم</label>
-              <span className={`text-xs font-bold ${totalWeight === 100 ? 'text-green-600' : 'text-amber-600'}`}>{totalWeight}% من 100%</span>
-            </div>
-            <div className="space-y-2">
-              {Object.entries(form.categoryWeights).map(([cat, weight]) => (
-                <div key={cat} className="flex items-center gap-3">
-                  <span className="text-sm text-gray-700 flex-1">{cat}</span>
-                  <input
-                    type="number"
-                    value={weight}
-                    onChange={(e) => setForm({ ...form, categoryWeights: { ...form.categoryWeights, [cat]: Number(e.target.value) } })}
-                    className="w-20 p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-violet-500 text-sm text-center"
-                  />
-                  <span className="text-sm text-gray-400">%</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
-          <Button
-            className="bg-violet-600 text-white hover:bg-violet-700 shadow-sm flex-1"
-            onClick={handleSubmit}
-            disabled={!form.subjectName.trim() || form.grades.length === 0 || isSubmitting}
-          >
-            {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export const Gradebook: React.FC<GradebookProps> = ({ role, language, permissions = [] }) => {
   const canEnterGrades = permissions.length === 0 || permissions.includes('grades_enter');
   const canApproveGrades = permissions.length === 0 || permissions.includes('grades_approve');
@@ -252,8 +149,8 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
   React.useEffect(() => {
     refreshGradeData();
+    const realConfig = selectedClassId ? (gradebooksData.find(g => g.id === selectedClassId) as any) : null;
     if (selectedClassId && defaultTermId) {
-      const realConfig = gradebooksData.find(g => g.id === selectedClassId) as any;
       setConfig(prev => ({
         ...prev,
         terms: [{ id: defaultTermId, name: 'الفصل الدراسي الأول', startDate: '', endDate: '', status: 'Active' }],
@@ -263,6 +160,16 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
       if (realConfig?.gradesList) {
         setSelectedTargetGrades(realConfig.gradesList);
       }
+      setSubjectNameInput(realConfig?.name || '');
+    } else if (!selectedClassId) {
+      // مفيش نظام محدد يعني إحنا بصدد إنشاء واحد جديد — نبدأ بحقول فاضية
+      setSubjectNameInput('');
+      setSelectedTargetGrades([]);
+      setConfig(prev => ({
+        ...prev,
+        categoryWeights: { 'الاختبارات القصيرة': 20, 'الواجبات': 20, 'المشاريع': 20, 'الاختبار النهائي': 40 },
+        passingScore: 60,
+      }));
     }
   }, [selectedClassId, defaultTermId]);
 
@@ -286,6 +193,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
   const [openColorMenuIdx, setOpenColorMenuIdx] = useState<number | null>(null);
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [selectedTargetGrades, setSelectedTargetGrades] = useState<string[]>([]);
+  const [subjectNameInput, setSubjectNameInput] = useState('');
   const [isTargetGradesMenuOpen, setIsTargetGradesMenuOpen] = useState(false);
 
   const k12Grades = GRADE_OPTIONS_GB;
@@ -600,45 +508,6 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     );
   };
 
-  const AdminLandingView = () => (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="flex justify-center py-6">
-        <Button onClick={() => setIsCreateConfigOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white px-8 py-4 text-base shadow-md">
-          <Plus size={20} className="mr-2" /> إنشاء نظام درجات جديد
-        </Button>
-      </div>
-      {configsLoading && (
-        <p className="text-center text-gray-400">جاري تحميل أنظمة الدرجات...</p>
-      )}
-      {!configsLoading && gradebooksData.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {gradebooksData.map(schema => (
-            <div
-              key={schema.id}
-              onClick={() => setSelectedClassId(schema.id)}
-              className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-none hover:border-gray-300 transition-all cursor-pointer relative overflow-hidden flex flex-col"
-            >
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-violet-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-              <div className="flex justify-between items-start mb-4">
-                <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center text-violet-600 group-hover:bg-violet-100 transition-colors">
-                  <School size={24} />
-                </div>
-                <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${schema.status === 'draft' ? 'bg-gray-100 text-gray-600 border-gray-200' : schema.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-                  {schema.status === 'draft' ? 'مسودة' : schema.status === 'pending' ? 'طلب اعتماد' : 'معتمد'}
-                </span>
-              </div>
-              <h3 className="text-lg font-bold text-gray-800 mb-1">{schema.name}</h3>
-              <p className="text-sm text-gray-500">{schema.grades}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {!configsLoading && gradebooksData.length === 0 && (
-        <p className="text-center text-gray-400 py-10">مفيش أنظمة درجات متعملة لسه — دوس "إنشاء نظام درجات جديد" فوق عشان تبدأ.</p>
-      )}
-    </div>
-  );
-
   const AdminJourney = () => {
     const isPendingSchema = selectedClassId ? gradebooksData.find(g => g.id === selectedClassId)?.status === 'pending' : false;
 
@@ -820,21 +689,40 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                 {!isPendingSchema && (
                   <>
                      <Button variant="secondary" disabled={adminStep === 1} className="shadow-none" onClick={() => setAdminStep(s => s - 1)}>السابق</Button>
-                     <Button className="bg-purple-600 text-white shadow-none" onClick={() => {
+                     <Button
+                       className="bg-purple-600 text-white shadow-none"
+                       disabled={adminStep === 3 && (!subjectNameInput.trim() || selectedTargetGrades.length === 0)}
+                       onClick={async () => {
                        if (adminStep === 3) {
+                         if (!subjectNameInput.trim() || selectedTargetGrades.length === 0) return;
                          setStatus('pending');
                          if (selectedClassId) {
-                           updateGradebookConfig({
+                           // نظام موجود بالفعل — نعدّله
+                           await updateGradebookConfig({
                              configId: selectedClassId,
-                             subjectName: (gradebooksData.find(g => g.id === selectedClassId) as any)?.name || '',
+                             subjectName: subjectNameInput,
                              grades: selectedTargetGrades,
                              passingScore: config.passingScore,
                              categoryWeights: config.categoryWeights,
-                           }).then(() => {
-                             updateGradebookConfigStatus(selectedClassId, 'pending').then(ok => {
-                               if (ok) refreshConfigs();
-                             });
                            });
+                           await updateGradebookConfigStatus(selectedClassId, 'pending');
+                           refreshConfigs();
+                         } else {
+                           // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة
+                           const newId = await createGradebookConfig({
+                             subjectName: subjectNameInput,
+                             grades: selectedTargetGrades,
+                             passingScore: config.passingScore,
+                             categoryWeights: config.categoryWeights,
+                           });
+                           if (newId) {
+                             await updateGradebookConfigStatus(newId, 'pending');
+                             refreshConfigs();
+                             setSelectedClassId(newId);
+                           } else {
+                             showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
+                             return;
+                           }
                          }
                          setActiveTab('teacher');
                          setAdminStep(1);
@@ -921,7 +809,8 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                            type="text" 
                            className="border border-gray-200 rounded-md p-3 w-full bg-gray-50 focus:bg-white focus:border-purple-500 focus:ring-0 outline-none shadow-none"
                            placeholder="مثال: سجل أعمال السنة - الفصل الدراسي الأول..." 
-                           defaultValue="سجل درجات العلوم - الصفوف المتوسطة"
+                           value={subjectNameInput}
+                           onChange={(e) => setSubjectNameInput(e.target.value)}
                          />
                       </div>
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-8 w-full">
@@ -1961,7 +1850,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   </button>
                </div>
                {activeTab === 'admin' && (
-                 <Button onClick={() => setIsCreateConfigOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
+                 <Button onClick={() => { setSelectedClassId(null); setAdminStep(1); }} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
                     <Plus size={18} className="mr-2" /> إنشاء نظام درجات جديد
                  </Button>
                )}
@@ -1971,8 +1860,6 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
        {!selectedClassId && activeTab === 'teacher' ? (
          ClassAndSubjectSelector()
-       ) : activeTab === 'admin' && !selectedClassId ? (
-         AdminLandingView()
        ) : activeTab === 'admin' ? (
          AdminJourney()
        ) : activeTab === 'approvals' ? (
@@ -1982,9 +1869,6 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
        )}
 
        {/* إضافة تقييم Modal */}
-       {isCreateConfigOpen && (
-         <CreateGradebookConfigModal onClose={() => setIsCreateConfigOpen(false)} onSubmit={handleCreateConfig} />
-       )}
 
        {isAddingAssessment && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
