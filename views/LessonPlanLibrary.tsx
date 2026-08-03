@@ -41,8 +41,12 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
   };
 
   useEffect(() => {
-    refreshPlans();
-    getAllDistinctSubjects().then(setAllSubjects);
+    setIsLoading(true);
+    Promise.all([getAllCurriculumLessonPlans(), getAllDistinctSubjects()]).then(([plansData, subjectsData]) => {
+      setPlans(plansData);
+      setAllSubjects(subjectsData);
+      setIsLoading(false);
+    });
   }, []);
 
   const grades = GRADE_LEVELS_LIB;

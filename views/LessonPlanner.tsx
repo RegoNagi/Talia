@@ -109,7 +109,6 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   const isReadOnly = editContext?.mode === 'view';
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState(false);
-  const pendingSubjectRef = React.useRef<string | null>(null);
   const GRADE_LEVELS_LP = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
   const [grade, setGrade] = useState(GRADE_LEVELS_LP[0]);
   const [subject, setSubject] = useState('');
@@ -127,13 +126,11 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   const isRTL = language === Language.AR;
 
   useEffect(() => {
+    if (editContext?.planId) return; // أثناء تحميل خطة موجودة، بنتولّى تحديد المادة بنفسنا في الـ effect التاني
     getCurriculumSubjectsDetailed(grade).then((subs) => {
       const names = subs.map(s => s.subject);
       setAvailableSubjects(names);
-      if (pendingSubjectRef.current && names.includes(pendingSubjectRef.current)) {
-        setSubject(pendingSubjectRef.current);
-        pendingSubjectRef.current = null;
-      } else if (names.length > 0 && !names.includes(subject)) {
+      if (names.length > 0 && !names.includes(subject)) {
         setSubject(names[0]);
       }
     });
@@ -142,21 +139,25 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   useEffect(() => {
     if (!editContext?.planId) return;
     setIsLoadingPlan(true);
-    getCurriculumLessonPlanById(editContext.planId).then((plan) => {
-      setIsLoadingPlan(false);
+    getCurriculumLessonPlanById(editContext.planId).then(async (plan) => {
       if (!plan) {
+        setIsLoadingPlan(false);
         showToast('حصل خطأ أثناء تحميل الخطة.', 'error');
         return;
       }
       let parsed: any = { blocks: [], topic: '' };
       try { parsed = JSON.parse(plan.content); } catch {}
-      pendingSubjectRef.current = plan.subject;
+      const subs = await getCurriculumSubjectsDetailed(plan.grade);
+      setAvailableSubjects(subs.map(s => s.subject));
       setGrade(plan.grade);
+      setSubject(plan.subject);
       setTopic(parsed.topic || '');
       setAiBlocks(parsed.blocks || []);
+      setManualBlocks([]);
       setActiveTab('ai');
       setEditingPlanId(plan.id);
       setHasGenerated(true);
+      setIsLoadingPlan(false);
     });
   }, [editContext?.planId]);
 

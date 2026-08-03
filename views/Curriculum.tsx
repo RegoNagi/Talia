@@ -100,9 +100,9 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const isRTL = language === Language.AR;
   const canEditCurriculum = permissions.length === 0 || permissions.includes('curriculum_edit');
 
-  const [selectedGrade, setSelectedGrade] = useState<string | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const [activeSubjectTab, setActiveSubjectTab] = useState<'resources' | 'schedule' | 'plans'>('schedule');
+  const [selectedGrade, setSelectedGrade] = useState<string | null>(() => restoreContext?.grade || null);
+  const [selectedSubject, setSelectedSubject] = useState<string | null>(() => restoreContext?.subject || null);
+  const [activeSubjectTab, setActiveSubjectTab] = useState<'resources' | 'schedule' | 'plans'>(() => restoreContext ? 'plans' : 'schedule');
 
   const [subjectsByGrade, setSubjectsByGrade] = useState<Record<string, { subject: string; code: string; nameEn: string; department: string }[]>>({});
   const [loadingSubjects, setLoadingSubjects] = useState(true);
@@ -149,15 +149,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       setAcademicSettings(s);
       setLoadingAcademicSettings(false);
     });
-  }, []);
-
-  useEffect(() => {
-    if (restoreContext) {
-      setSelectedGrade(restoreContext.grade);
-      setSelectedSubject(restoreContext.subject);
-      setActiveSubjectTab('plans');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSelectSystem = async (systemId: string) => {
