@@ -1291,3 +1291,21 @@ export async function deleteCurriculumLessonPlan(planId: string): Promise<boolea
   }
   return true;
 }
+
+// إعداد النظام التعليمي والعام الدراسي (إعداد واحد عام)
+export async function getAcademicYearSettings(): Promise<{ system: string; startDate: string; academicYear: string } | null> {
+  const { data, error } = await supabase.from('academic_year_settings').select('system, start_date, academic_year').eq('id', 1).maybeSingle();
+  if (error || !data || !data.system) {
+    return null;
+  }
+  return { system: data.system, startDate: data.start_date, academicYear: data.academic_year || '' };
+}
+
+export async function saveAcademicYearSettings(system: string, startDate: string, academicYear: string): Promise<boolean> {
+  const { error } = await supabase.from('academic_year_settings').upsert({ id: 1, system, start_date: startDate, academic_year: academicYear });
+  if (error) {
+    console.error('Error saving academic year settings:', error);
+    return false;
+  }
+  return true;
+}

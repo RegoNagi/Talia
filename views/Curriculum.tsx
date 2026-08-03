@@ -9,6 +9,8 @@ import {
   getCurriculumWeeks, saveCurriculumWeek, deleteCurriculumWeek,
   getCurriculumResources, addCurriculumResource, deleteCurriculumResource,
   getCurriculumLessonPlans, createCurriculumLessonPlan, deleteCurriculumLessonPlan,
+  getCurriculumFolders, createCurriculumFolder, deleteCurriculumFolder,
+  getAcademicYearSettings, saveAcademicYearSettings,
 } from '../services/supabaseData';
 import {
   Folder,
@@ -24,6 +26,13 @@ import {
   Clock,
   ArrowLeft,
   Link2,
+  Flag,
+  Crown,
+  Globe2,
+  Star,
+  UploadCloud,
+  FolderPlus,
+  Users,
 } from 'lucide-react';
 
 interface CurriculumProps {
@@ -76,52 +85,6 @@ const AddSubjectModal: React.FC<{ grade: string; onClose: () => void; onSubmit: 
           <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
           <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleSubmit} disabled={!form.subject.trim() || isSubmitting}>
             {isSubmitting ? 'جاري الإضافة...' : 'إضافة'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const AddWeekModal: React.FC<{ nextWeekNumber: number; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ nextWeekNumber, onClose, onSubmit }) => {
-  const [form, setForm] = useState({ weekNumber: nextWeekNumber, startDate: '', endDate: '', topicsText: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    setIsSubmitting(true);
-    const topics = form.topicsText.split('\n').map(t => t.trim()).filter(Boolean);
-    const ok = await onSubmit({ ...form, topics });
-    setIsSubmitting(false);
-    if (ok) onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <h3 className="text-xl font-bold text-gray-900">إضافة أسبوع {form.weekNumber}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><XIcon size={20} /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">من تاريخ</label>
-              <input type="date" value={form.startDate} onChange={(e) => setForm({ ...form, startDate: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-1">إلى تاريخ</label>
-              <input type="date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">المواضيع (سطر لكل موضوع)</label>
-            <textarea value={form.topicsText} onChange={(e) => setForm({ ...form, topicsText: e.target.value })} rows={4} placeholder={"مقدمة الوحدة\nتطبيقات عملية\nمراجعة"} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-        </div>
-        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
-          <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleSubmit} disabled={isSubmitting}>
-            {isSubmitting ? 'جاري الحفظ...' : 'حفظ الأسبوع'}
           </Button>
         </div>
       </div>
@@ -197,9 +160,102 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [loadingSubjectData, setLoadingSubjectData] = useState(false);
 
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
-  const [isAddWeekOpen, setIsAddWeekOpen] = useState(false);
   const [isAddResourceOpen, setIsAddResourceOpen] = useState(false);
   const [generatingLesson, setGeneratingLesson] = useState(false);
+
+  const [academicSettings, setAcademicSettings] = useState<{ system: string; startDate: string; academicYear: string } | null>(null);
+  const [loadingAcademicSettings, setLoadingAcademicSettings] = useState(true);
+  const [pendingSystem, setPendingSystem] = useState<string | null>(null);
+  const [pendingStartDate, setPendingStartDate] = useState('');
+  const [folders, setFolders] = useState<{ id: string; name: string; parentFolderId: string | null }[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [addingTaskWeek, setAddingTaskWeek] = useState<number | null>(null);
+  const [newTaskText, setNewTaskText] = useState('');
+
+  const SYSTEM_OPTIONS = [
+    { id: 'National', name: 'وطني', icon: 'flag' },
+    { id: 'IG', name: 'بريطاني (IG)', icon: 'crown' },
+    { id: 'IB', name: 'الباكالوريا الدولية (IB)', icon: 'globe' },
+    { id: 'American', name: 'النظام الأمريكي', icon: 'star' },
+  ];
+
+  useEffect(() => {
+    getAcademicYearSettings().then((s) => {
+      setAcademicSettings(s);
+      setLoadingAcademicSettings(false);
+    });
+  }, []);
+
+  const handleConfirmSystemSetup = async () => {
+    if (!pendingSystem || !pendingStartDate) return;
+    const year = new Date(pendingStartDate).getFullYear();
+    const academicYear = `${year}-${year + 1}`;
+    const ok = await saveAcademicYearSettings(pendingSystem, pendingStartDate, academicYear);
+    if (ok) {
+      setAcademicSettings({ system: pendingSystem, startDate: pendingStartDate, academicYear });
+      showToast('تم إعداد النظام التعليمي والعام الدراسي بنجاح.', 'success');
+      setPendingSystem(null);
+    } else {
+      showToast('حصل خطأ أثناء الحفظ.', 'error');
+    }
+  };
+
+  // بيحسب تاريخ بداية ونهاية أسبوع معيّن، بناءً على تاريخ بداية العام الدراسي (أسبوع دراسي = 5 أيام)
+  const computeWeekDates = (weekNumber: number): { startDate: string; endDate: string } => {
+    if (!academicSettings?.startDate) return { startDate: '', endDate: '' };
+    const start = new Date(academicSettings.startDate);
+    start.setDate(start.getDate() + (weekNumber - 1) * 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 4);
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return { startDate: fmt(start), endDate: fmt(end) };
+  };
+
+  const TOTAL_ACADEMIC_WEEKS = 36;
+
+  const handleAddTopicToWeek = async (weekNumber: number) => {
+    if (!newTaskText.trim() || !selectedGrade || !selectedSubject) return;
+    const existing = weeks.find(w => w.weekNumber === weekNumber);
+    const { startDate, endDate } = computeWeekDates(weekNumber);
+    const topics = [...(existing?.topics || []), newTaskText.trim()];
+    const ok = await saveCurriculumWeek({ grade: selectedGrade, subject: selectedSubject, weekNumber, startDate, endDate, topics });
+    if (ok) {
+      getCurriculumWeeks(selectedGrade, selectedSubject).then(setWeeks);
+      setNewTaskText('');
+      setAddingTaskWeek(null);
+    } else {
+      showToast('حصل خطأ أثناء حفظ المهمة.', 'error');
+    }
+  };
+
+  const refreshFolders = () => {
+    if (!selectedGrade || !selectedSubject) return;
+    getCurriculumFolders(selectedGrade, selectedSubject).then(setFolders);
+  };
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim() || !selectedGrade || !selectedSubject) return;
+    const id = await createCurriculumFolder({ grade: selectedGrade, subject: selectedSubject, name: newFolderName, parentFolderId: currentFolderId });
+    if (id) {
+      refreshFolders();
+      setNewFolderName('');
+      setIsCreatingFolder(false);
+    } else {
+      showToast('حصل خطأ أثناء إنشاء المجلد.', 'error');
+    }
+  };
+
+  const handleDeleteFolder = async (folderId: string) => {
+    const confirmed = await confirmDialog('متأكد إنك عايز تمسح المجلد ده وكل اللي جواه؟', 'حذف');
+    if (!confirmed) return;
+    const ok = await deleteCurriculumFolder(folderId);
+    if (ok) {
+      refreshFolders();
+      showToast('تم حذف المجلد.', 'success');
+    }
+  };
 
   const refreshGradeSubjects = (grade: string) => {
     getCurriculumSubjectsDetailed(grade).then((subjects) => {
@@ -220,14 +276,17 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   useEffect(() => {
     if (!selectedGrade || !selectedSubject) return;
     setLoadingSubjectData(true);
+    setCurrentFolderId(null);
     Promise.all([
       getCurriculumWeeks(selectedGrade, selectedSubject),
       getCurriculumResources(selectedGrade, selectedSubject),
       getCurriculumLessonPlans(selectedGrade, selectedSubject),
-    ]).then(([w, r, p]) => {
+      getCurriculumFolders(selectedGrade, selectedSubject),
+    ]).then(([w, r, p, f]) => {
       setWeeks(w);
       setResources(r);
       setLessonPlans(p);
+      setFolders(f);
       setLoadingSubjectData(false);
     });
   }, [selectedGrade, selectedSubject]);
@@ -260,18 +319,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     } else {
       showToast('حصل خطأ أثناء حذف المادة.', 'error');
     }
-  };
-
-  const handleAddWeek = async (form: any): Promise<boolean> => {
-    if (!selectedGrade || !selectedSubject) return false;
-    const ok = await saveCurriculumWeek({ grade: selectedGrade, subject: selectedSubject, weekNumber: form.weekNumber, startDate: form.startDate, endDate: form.endDate, topics: form.topics });
-    if (ok) {
-      getCurriculumWeeks(selectedGrade, selectedSubject).then(setWeeks);
-      showToast('تم حفظ الأسبوع بنجاح.', 'success');
-    } else {
-      showToast('حصل خطأ أثناء حفظ الأسبوع.', 'error');
-    }
-    return ok;
   };
 
   const handleDeleteWeek = async (weekId: string) => {
@@ -360,8 +407,8 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
 
       <div className={`w-full lg:w-80 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${(selectedGrade || selectedSubject) ? 'hidden lg:flex' : 'flex'}`}>
         <div className="p-6 border-b border-gray-100 bg-gray-50/50">
-          <h3 className="font-bold text-lg text-gray-900">المنهج الدراسي</h3>
-          <p className="text-xs text-gray-500 font-medium mt-1">المراحل والصفوف</p>
+          <h3 className="font-bold text-lg text-gray-900">{SYSTEM_OPTIONS.find(s => s.id === academicSettings?.system)?.name || 'المنهج الدراسي'}</h3>
+          <p className="text-xs text-gray-500 font-medium mt-1">{academicSettings?.academicYear || 'المراحل والصفوف'}</p>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
           {GRADE_LEVELS.map((grade) => (
@@ -395,7 +442,48 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       </div>
 
       <div className={`flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${(selectedGrade || selectedSubject) ? 'flex' : 'hidden lg:flex'}`}>
-        {!selectedGrade ? (
+        {!selectedGrade && !loadingAcademicSettings && !academicSettings ? (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-y-auto">
+            <h2 className="text-3xl font-extrabold text-gray-900 mb-3">إعداد المناهج التعليمية</h2>
+            <p className="text-gray-500 mb-10">حدد الأطر التعليمية لإنشاء الدرجات والمواد والأكاديميات آلياً.</p>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl">
+              {SYSTEM_OPTIONS.map((sys) => {
+                const IconComp = sys.icon === 'flag' ? Flag : sys.icon === 'crown' ? Crown : sys.icon === 'globe' ? Globe2 : Star;
+                return (
+                  <button
+                    key={sys.id}
+                    onClick={() => setPendingSystem(sys.id)}
+                    className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center gap-4"
+                  >
+                    <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
+                      <IconComp size={28} />
+                    </div>
+                    <span className="font-bold text-gray-900">{sys.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {pendingSystem && (
+              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
+                  <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                    <h3 className="text-lg font-bold text-gray-900">متى يبدأ العام الدراسي؟</h3>
+                    <button onClick={() => setPendingSystem(null)} className="text-gray-400 hover:text-gray-600"><XIcon size={20} /></button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ بداية العام الدراسي</label>
+                    <input type="date" value={pendingStartDate} onChange={(e) => setPendingStartDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
+                  </div>
+                  <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+                    <Button variant="secondary" className="flex-1" onClick={() => setPendingSystem(null)}>إلغاء</Button>
+                    <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleConfirmSystemSetup} disabled={!pendingStartDate}>حفظ والمتابعة</Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        ) : !selectedGrade ? (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
             <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
               <Folder size={48} className="text-gray-300" />
@@ -500,81 +588,167 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                     <div className="bg-gray-50/50 rounded-3xl p-6 h-fit w-full">
                       <div className="flex justify-between items-center w-full mb-6 border-b border-slate-100 pb-4">
                         <h3 className="text-lg font-bold text-slate-800">الخطة الزمنية للمادة</h3>
-                        {canEditCurriculum && (
-                        <Button onClick={() => setIsAddWeekOpen(true)} className="bg-violet-600 text-white hover:bg-violet-700 text-sm">
-                          <Plus size={16} /> إضافة أسبوع
-                        </Button>
-                        )}
+                        <span className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white text-xs font-bold">AI ✨</span>
                       </div>
-                      <div className="flex flex-col gap-4 w-full">
-                        {weeks.map((week) => (
-                          <div key={week.id} className="bg-white rounded-2xl border border-slate-200 p-5 w-full shadow-sm group">
-                            <div className="flex justify-between items-center w-full mb-4 border-b border-slate-100 pb-2">
-                              <span className="text-lg font-bold text-violet-700 tracking-wider block">الأسبوع {week.weekNumber}</span>
-                              <div className="flex items-center gap-3">
-                                <p className="text-sm font-medium text-slate-500">{formatArabicDate(week.startDate)} - {formatArabicDate(week.endDate)}</p>
+                      {!academicSettings?.startDate ? (
+                        <p className="text-center text-gray-400 py-10">لسه محتاج تحدد تاريخ بداية العام الدراسي من إعداد المنهج عشان تظهر الأسابيع بتواريخها.</p>
+                      ) : (
+                        <div className="flex flex-col gap-4 w-full">
+                          {Array.from({ length: TOTAL_ACADEMIC_WEEKS }).map((_, i) => {
+                            const weekNumber = i + 1;
+                            const { startDate, endDate } = computeWeekDates(weekNumber);
+                            const week = weeks.find(w => w.weekNumber === weekNumber);
+                            return (
+                              <div key={weekNumber} className="bg-white rounded-2xl border border-slate-200 p-5 w-full shadow-sm group">
+                                <div className="flex justify-between items-center w-full mb-4 border-b border-slate-100 pb-2">
+                                  <span className="text-lg font-bold text-violet-700 tracking-wider block">الأسبوع {weekNumber}</span>
+                                  <p className="text-sm font-medium text-slate-500">{formatArabicDate(startDate)} - {formatArabicDate(endDate)}</p>
+                                </div>
+                                {week?.topics && week.topics.length > 0 && (
+                                  <div className="mt-2 space-y-2 mb-3">
+                                    {week.topics.map((topic, ti) => (
+                                      <div key={ti} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg text-sm font-medium text-gray-700">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                                        {topic}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 {canEditCurriculum && (
-                                <button onClick={() => handleDeleteWeek(week.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Trash2 size={16} />
-                                </button>
+                                  addingTaskWeek === weekNumber ? (
+                                    <div className="flex gap-2">
+                                      <input
+                                        autoFocus
+                                        type="text"
+                                        value={newTaskText}
+                                        onChange={(e) => setNewTaskText(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddTopicToWeek(weekNumber)}
+                                        placeholder="اسم المهمة أو الموضوع..."
+                                        className="flex-1 bg-gray-50 border border-violet-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                                      />
+                                      <Button onClick={() => handleAddTopicToWeek(weekNumber)} className="text-xs px-4">حفظ</Button>
+                                      <button onClick={() => { setAddingTaskWeek(null); setNewTaskText(''); }} className="text-xs text-gray-400 px-2">إلغاء</button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={() => setAddingTaskWeek(weekNumber)}
+                                      className="w-full border-2 border-dashed border-gray-200 text-gray-500 rounded-xl p-2.5 flex justify-center items-center hover:bg-gray-50 hover:border-purple-200 hover:text-purple-600 transition-colors font-bold text-sm gap-2"
+                                    >
+                                      <Plus size={16} /> إضافة مهمة
+                                    </button>
+                                  )
                                 )}
                               </div>
-                            </div>
-                            {week.topics && week.topics.length > 0 ? (
-                              <div className="mt-2 space-y-2">
-                                {week.topics.map((topic, ti) => (
-                                  <div key={ti} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg text-sm font-medium text-gray-700">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
-                                    {topic}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-xs text-gray-400">مفيش مواضيع مسجّلة للأسبوع ده لسه.</p>
-                            )}
-                          </div>
-                        ))}
-                        {weeks.length === 0 && (
-                          <p className="text-center text-gray-400 py-10">مفيش أسابيع متعملة لسه — دوس "إضافة أسبوع" فوق.</p>
-                        )}
-                      </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   )}
 
                   {!loadingSubjectData && activeSubjectTab === 'resources' && (
                     <div className="space-y-6">
-                      <div className="flex justify-between items-center">
-                        <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                          المكتبة <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{resources.length}</span>
-                        </h3>
+                      <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center bg-gray-50/50">
+                        <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-violet-600">
+                          <UploadCloud size={32} />
+                        </div>
+                        <h3 className="font-bold text-gray-900 mb-1">رفع الموارد</h3>
+                        <p className="text-sm text-gray-500 mb-6">سحب وإفلات الملفات أو الاستيراد</p>
                         {canEditCurriculum && (
-                        <Button onClick={() => setIsAddResourceOpen(true)} className="bg-violet-600 text-white hover:bg-violet-700 text-sm">
-                          <Plus size={16} /> إضافة مصدر
-                        </Button>
+                          <div className="flex flex-wrap justify-center gap-3">
+                            {['رابط', 'وثيقة', 'فيديو', 'عرض تقديمي'].map((type) => (
+                              <button
+                                key={type}
+                                onClick={() => setIsAddResourceOpen(true)}
+                                className="px-4 py-2 bg-white border border-gray-100 rounded-full text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-none"
+                              >
+                                + {type}
+                              </button>
+                            ))}
+                          </div>
                         )}
                       </div>
-                      <div className="space-y-3">
-                        {resources.map((r) => (
-                          <div key={r.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
-                            <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-1">
-                              <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
-                                <Link2 size={18} />
-                              </div>
-                              <div>
-                                <p className="font-bold text-gray-900 text-sm">{r.title}</p>
-                                <p className="text-xs text-gray-400">{r.type}</p>
-                              </div>
-                            </a>
+
+                      <div>
+                        <div className="flex justify-between items-center mb-4">
+                          <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                            المكتبة <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{folders.filter(f => f.parentFolderId === currentFolderId).length + resources.filter(r => r.folderId === currentFolderId).length}</span>
+                          </h3>
+                          <div className="flex gap-2 items-center">
+                            {currentFolderId && (
+                              <button onClick={() => setCurrentFolderId(null)} className="text-xs font-bold text-gray-500 hover:text-gray-900 flex items-center gap-1">
+                                <ArrowLeft size={14} /> رجوع
+                              </button>
+                            )}
                             {canEditCurriculum && (
-                            <button onClick={() => handleDeleteResource(r.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <Trash2 size={16} />
-                            </button>
+                              <button onClick={() => setIsCreatingFolder(true)} className="text-xs font-bold text-violet-600 hover:bg-violet-50 px-2 py-1 rounded flex items-center gap-1">
+                                <FolderPlus size={14} /> مجلد جديد
+                              </button>
                             )}
                           </div>
-                        ))}
-                        {resources.length === 0 && (
-                          <p className="text-center text-gray-400 py-10">مفيش موارد متضافة لسه.</p>
+                        </div>
+
+                        {isCreatingFolder && (
+                          <div className="mb-4 p-4 bg-violet-50 rounded-2xl border border-violet-100 flex gap-2 animate-fadeIn">
+                            <input
+                              autoFocus
+                              type="text"
+                              value={newFolderName}
+                              onChange={(e) => setNewFolderName(e.target.value)}
+                              placeholder="اسم المجلد..."
+                              className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                              onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                            />
+                            <Button onClick={handleCreateFolder} className="py-2 px-4 text-xs">إنشاء</Button>
+                            <button onClick={() => setIsCreatingFolder(false)} className="text-gray-400 hover:text-gray-600 px-2">إلغاء</button>
+                          </div>
                         )}
+
+                        <div className="space-y-3">
+                          {folders.filter(f => f.parentFolderId === currentFolderId).map((folder) => (
+                            <div key={folder.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
+                              <div onClick={() => setCurrentFolderId(folder.id)} className="flex items-center gap-4 flex-1 cursor-pointer">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+                                  <Folder size={20} fill="currentColor" fillOpacity={0.2} />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900 text-sm">{folder.name}</p>
+                                  <p className="text-xs text-gray-400">
+                                    {resources.filter(r => r.folderId === folder.id).length} عناصر • {folders.filter(f => f.parentFolderId === folder.id).length} مجلدات
+                                  </p>
+                                </div>
+                              </div>
+                              {canEditCurriculum && (
+                                <button onClick={() => handleDeleteFolder(folder.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          {resources.filter(r => r.folderId === currentFolderId).map((r) => (
+                            <div key={r.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
+                              <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-1">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+                                  <Link2 size={18} />
+                                </div>
+                                <div>
+                                  <p className="font-bold text-gray-900 text-sm">{r.title}</p>
+                                  <p className="text-xs text-gray-400">{r.type}</p>
+                                </div>
+                              </a>
+                              {canEditCurriculum && (
+                                <button onClick={() => handleDeleteResource(r.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+
+                          {folders.filter(f => f.parentFolderId === currentFolderId).length === 0 && resources.filter(r => r.folderId === currentFolderId).length === 0 && (
+                            <p className="text-center text-gray-400 py-10">المجلد فاضي — مفيش موارد أو مجلدات فرعية لسه.</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -638,9 +812,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
 
       {isAddSubjectOpen && selectedGrade && (
         <AddSubjectModal grade={selectedGrade} onClose={() => setIsAddSubjectOpen(false)} onSubmit={handleAddSubject} />
-      )}
-      {isAddWeekOpen && (
-        <AddWeekModal nextWeekNumber={weeks.length + 1} onClose={() => setIsAddWeekOpen(false)} onSubmit={handleAddWeek} />
       )}
       {isAddResourceOpen && (
         <AddResourceModal onClose={() => setIsAddResourceOpen(false)} onSubmit={handleAddResource} />
