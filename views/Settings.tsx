@@ -3,6 +3,7 @@ import { Language, UserRole, SettingsTab, Course, AcademicYearConfig, Holiday, T
 import { Button } from '../components/Button';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { showToast } from '../components/Toast';
+import { saveAcademicYearSettings } from '../services/supabaseData';
 import { 
   generateConflictFreeSchedule,
   simulateHolidayImpact,
@@ -1950,9 +1951,21 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                 {isRTL ? 'تم تكوين العام الدراسي بنجاح. يمكنك الآن البدء في تسجيل الطلاب.' : 'The academic year has been successfully configured. You can now start registering students.'}
                               </p>
                               <Button 
-                                onClick={() => {
+                                onClick={async () => {
                                   setAcademicYearViewMode('BROWSE');
                                   setAcademicYear({ ...academicYear, status: 'Active' });
+                                  if (academicYear.terms.length > 0) {
+                                    const starts = academicYear.terms.map(t => new Date(t.startDate).getTime()).filter(n => !isNaN(n));
+                                    const ends = academicYear.terms.map(t => new Date(t.endDate).getTime()).filter(n => !isNaN(n));
+                                    if (starts.length > 0 && ends.length > 0) {
+                                      const overallStart = new Date(Math.min(...starts)).toISOString().split('T')[0];
+                                      const overallEnd = new Date(Math.max(...ends)).toISOString().split('T')[0];
+                                      const ok = await saveAcademicYearSettings('', overallStart, overallEnd, academicYear.name);
+                                      if (ok) {
+                                        showToast('تم تفعيل العام الدراسي، وهيبقى متاح تلقائيًا في المنهج الدراسي.', 'success');
+                                      }
+                                    }
+                                  }
                                 }}
                                 className="w-full bg-white text-violet-600 hover:bg-violet-50 h-12 rounded-2xl font-bold"
                               >

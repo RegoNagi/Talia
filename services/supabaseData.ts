@@ -1320,10 +1320,23 @@ export async function getAcademicYearSettings(): Promise<{ system: string; start
 }
 
 export async function saveAcademicYearSettings(system: string, startDate: string, endDate: string, academicYear: string): Promise<boolean> {
-  const { error } = await supabase.from('academic_year_settings').upsert({ id: 1, system, start_date: startDate, end_date: endDate, academic_year: academicYear });
+  const { data: existing } = await supabase.from('academic_year_settings').select('system, start_date, end_date, academic_year').eq('id', 1).maybeSingle();
+  const merged = {
+    id: 1,
+    system: system || existing?.system || null,
+    start_date: startDate || existing?.start_date || null,
+    end_date: endDate || existing?.end_date || null,
+    academic_year: academicYear || existing?.academic_year || null,
+  };
+  const { error } = await supabase.from('academic_year_settings').upsert(merged);
   if (error) {
     console.error('Error saving academic year settings:', error);
     return false;
   }
   return true;
+}
+
+// بيحفظ النظام التعليمي بس (بدون التأثير على تواريخ العام الدراسي، اللي بتتحدد من الإعدادات)
+export async function saveEducationSystem(system: string): Promise<boolean> {
+  return saveAcademicYearSettings(system, '', '', '');
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Language } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
 import { Button } from '../components/Button';
@@ -10,7 +10,7 @@ import {
   getCurriculumResources, addCurriculumResource, updateCurriculumResource, deleteCurriculumResource,
   getCurriculumLessonPlans, createCurriculumLessonPlan, deleteCurriculumLessonPlan,
   getCurriculumFolders, createCurriculumFolder, renameCurriculumFolder, deleteCurriculumFolder,
-  getAcademicYearSettings, saveAcademicYearSettings,
+  getAcademicYearSettings, saveAcademicYearSettings, saveEducationSystem,
 } from '../services/supabaseData';
 import {
   Folder,
@@ -115,9 +115,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
 
   const [academicSettings, setAcademicSettings] = useState<{ system: string; startDate: string; endDate: string; academicYear: string } | null>(null);
   const [loadingAcademicSettings, setLoadingAcademicSettings] = useState(true);
-  const [pendingSystem, setPendingSystem] = useState<string | null>(null);
-  const [pendingStartDate, setPendingStartDate] = useState('');
-  const [pendingEndDate, setPendingEndDate] = useState('');
   const [folders, setFolders] = useState<{ id: string; name: string; parentFolderId: string | null }[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -128,6 +125,8 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
   const [linkForm, setLinkForm] = useState({ title: '', type: 'Link', url: '' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingUploadTypeRef = useRef<string>('Document');
 
   const SYSTEM_OPTIONS = [
     { id: 'National', name: 'وطني', icon: 'flag' },
@@ -143,16 +142,16 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     });
   }, []);
 
-  const handleConfirmSystemSetup = async () => {
-    if (!pendingSystem || !pendingStartDate || !pendingEndDate) return;
-    const startYear = new Date(pendingStartDate).getFullYear();
-    const endYear = new Date(pendingEndDate).getFullYear();
-    const academicYear = startYear === endYear ? `${startYear}` : `${startYear}-${endYear}`;
-    const ok = await saveAcademicYearSettings(pendingSystem, pendingStartDate, pendingEndDate, academicYear);
+  const handleSelectSystem = async (systemId: string) => {
+    const ok = await saveEducationSystem(systemId);
     if (ok) {
-      setAcademicSettings({ system: pendingSystem, startDate: pendingStartDate, endDate: pendingEndDate, academicYear });
-      showToast('تم إعداد النظام التعليمي والعام الدراسي بنجاح.', 'success');
-      setPendingSystem(null);
+      setAcademicSettings((prev) => ({
+        system: systemId,
+        startDate: prev?.startDate || '',
+        endDate: prev?.endDate || '',
+        academicYear: prev?.academicYear || '',
+      }));
+      showToast('تم تحديد النظام التعليمي بنجاح.', 'success');
     } else {
       showToast('حصل خطأ أثناء الحفظ.', 'error');
     }
@@ -293,6 +292,26 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     }
   };
 
+  const handleFakeFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !selectedGrade || !selectedSubject) return;
+    const id = await addCurriculumResource({
+      grade: selectedGrade,
+      subject: selectedSubject,
+      title: file.name,
+      type: pendingUploadTypeRef.current,
+      url: '#',
+      folderId: currentFolderId,
+    });
+    if (id) {
+      getCurriculumResources(selectedGrade, selectedSubject).then(setResources);
+      showToast('اترفع الملف (تجريبيًا) — تقدر تعيد تسميته من هنا. رفع الملفات الفعلي محتاج مساحة تخزين حقيقية لسه.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الإضافة.', 'error');
+    }
+  };
+
   const handleAddResource = async () => {
     if (!selectedGrade || !selectedSubject || !linkForm.title.trim() || !linkForm.url.trim()) return;
     const id = await addCurriculumResource({ grade: selectedGrade, subject: selectedSubject, title: linkForm.title, type: linkForm.type, url: linkForm.url, folderId: currentFolderId });
@@ -392,7 +411,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
             return (
               <button
                 key={sys.id}
-                onClick={() => setPendingSystem(sys.id)}
+                onClick={() => handleSelectSystem(sys.id)}
                 className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center gap-4"
               >
                 <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
@@ -403,31 +422,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
             );
           })}
         </div>
-
-        {pendingSystem && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
-              <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                <h3 className="text-lg font-bold text-gray-900">مواعيد العام الدراسي</h3>
-                <button onClick={() => setPendingSystem(null)} className="text-gray-400 hover:text-gray-600"><XIcon size={20} /></button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ بداية العام الدراسي</label>
-                  <input type="date" value={pendingStartDate} onChange={(e) => setPendingStartDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ نهاية العام الدراسي</label>
-                  <input type="date" value={pendingEndDate} onChange={(e) => setPendingEndDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-                </div>
-              </div>
-              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-                <Button variant="secondary" className="flex-1" onClick={() => setPendingSystem(null)}>إلغاء</Button>
-                <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleConfirmSystemSetup} disabled={!pendingStartDate || !pendingEndDate}>حفظ والمتابعة</Button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -589,7 +583,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                         <span className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white text-xs font-bold">AI ✨</span>
                       </div>
                       {!academicSettings?.startDate ? (
-                        <p className="text-center text-gray-400 py-10">لسه محتاج تحدد تاريخ بداية العام الدراسي من إعداد المنهج عشان تظهر الأسابيع بتواريخها.</p>
+                        <p className="text-center text-gray-400 py-10">لسه محتاج تفعّل العام الدراسي (بتواريخه) من "الإعدادات ← العام الدراسي" عشان تظهر الأسابيع بتواريخها هنا.</p>
                       ) : (
                         <div className="flex flex-col gap-4 w-full">
                           {Array.from({ length: TOTAL_ACADEMIC_WEEKS }).map((_, i) => {
@@ -663,12 +657,21 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                             ].map(({ label, type }) => (
                               <button
                                 key={type}
-                                onClick={() => { setIsAddingLink(true); setLinkForm({ title: '', type, url: '' }); }}
+                                onClick={() => {
+                                  if (type === 'Link') {
+                                    setIsAddingLink(true);
+                                    setLinkForm({ title: '', type, url: '' });
+                                  } else {
+                                    pendingUploadTypeRef.current = type;
+                                    fileInputRef.current?.click();
+                                  }
+                                }}
                                 className="px-4 py-2 bg-white border border-gray-100 rounded-full text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-none"
                               >
                                 + {label}
                               </button>
                             ))}
+                            <input ref={fileInputRef} type="file" className="hidden" onChange={handleFakeFileSelected} />
                           </div>
                         )}
                       </div>
