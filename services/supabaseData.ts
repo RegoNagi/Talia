@@ -1095,3 +1095,199 @@ export async function getCurriculumSubjects(grade: string): Promise<string[]> {
   }
   return (data || []).map((row: any) => row.subject);
 }
+
+// ================== المنهج الدراسي (Curriculum) ==================
+
+// بيجيب كل مواد صف معيّن مع تفاصيلها
+export async function getCurriculumSubjectsDetailed(grade: string): Promise<{ subject: string; code: string; nameEn: string; department: string }[]> {
+  const { data, error } = await supabase.from('curriculum_subjects').select('subject, code, name_en, department').eq('grade', grade);
+  if (error) {
+    console.error('Error fetching curriculum subjects:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    subject: row.subject,
+    code: row.code || '',
+    nameEn: row.name_en || '',
+    department: row.department || '',
+  }));
+}
+
+// بيضيف مادة جديدة لمنهج صف معيّن
+export async function addCurriculumSubject(input: { grade: string; subject: string; code?: string; nameEn?: string; department?: string }): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_subjects').insert({
+    grade: input.grade,
+    subject: input.subject,
+    code: input.code || null,
+    name_en: input.nameEn || null,
+    department: input.department || null,
+  });
+  if (error) {
+    console.error('Error adding curriculum subject:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيمسح مادة من منهج صف معيّن
+export async function removeCurriculumSubject(grade: string, subject: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_subjects').delete().eq('grade', grade).eq('subject', subject);
+  if (error) {
+    console.error('Error removing curriculum subject:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيجيب الخطة الأسبوعية الحقيقية لمادة في صف معيّن
+export async function getCurriculumWeeks(grade: string, subject: string): Promise<{ id: string; weekNumber: number; startDate: string; endDate: string; topics: string[] }[]> {
+  const { data, error } = await supabase
+    .from('curriculum_weeks')
+    .select('id, week_number, start_date, end_date, topics')
+    .eq('grade', grade)
+    .eq('subject', subject)
+    .order('week_number', { ascending: true });
+  if (error) {
+    console.error('Error fetching curriculum weeks:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    weekNumber: row.week_number,
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    topics: row.topics || [],
+  }));
+}
+
+// بيحفظ (ينشئ أو يعدّل) أسبوع كامل بمواضيعه
+export async function saveCurriculumWeek(input: { grade: string; subject: string; weekNumber: number; startDate: string; endDate: string; topics: string[] }): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_weeks').upsert({
+    grade: input.grade,
+    subject: input.subject,
+    week_number: input.weekNumber,
+    start_date: input.startDate || null,
+    end_date: input.endDate || null,
+    topics: input.topics,
+  }, { onConflict: 'grade,subject,week_number' });
+  if (error) {
+    console.error('Error saving curriculum week:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteCurriculumWeek(weekId: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_weeks').delete().eq('id', weekId);
+  if (error) {
+    console.error('Error deleting curriculum week:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيجيب موارد مادة معيّنة (وفلاتر اختياري بالمجلد)
+export async function getCurriculumResources(grade: string, subject: string): Promise<{ id: string; title: string; type: string; url: string; folderId: string | null }[]> {
+  const { data, error } = await supabase
+    .from('curriculum_resources')
+    .select('id, title, type, url, folder_id')
+    .eq('grade', grade)
+    .eq('subject', subject)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching curriculum resources:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({ id: row.id, title: row.title, type: row.type, url: row.url, folderId: row.folder_id }));
+}
+
+export async function addCurriculumResource(input: { grade: string; subject: string; title: string; type: string; url: string; folderId?: string | null }): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('curriculum_resources')
+    .insert({ grade: input.grade, subject: input.subject, title: input.title, type: input.type, url: input.url, folder_id: input.folderId || null })
+    .select('id')
+    .single();
+  if (error || !data) {
+    console.error('Error adding curriculum resource:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function deleteCurriculumResource(resourceId: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_resources').delete().eq('id', resourceId);
+  if (error) {
+    console.error('Error deleting curriculum resource:', error);
+    return false;
+  }
+  return true;
+}
+
+// مجلدات مكتبة الموارد
+export async function getCurriculumFolders(grade: string, subject: string): Promise<{ id: string; name: string; parentFolderId: string | null }[]> {
+  const { data, error } = await supabase.from('curriculum_folders').select('id, name, parent_folder_id').eq('grade', grade).eq('subject', subject);
+  if (error) {
+    console.error('Error fetching curriculum folders:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({ id: row.id, name: row.name, parentFolderId: row.parent_folder_id }));
+}
+
+export async function createCurriculumFolder(input: { grade: string; subject: string; name: string; parentFolderId?: string | null }): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('curriculum_folders')
+    .insert({ grade: input.grade, subject: input.subject, name: input.name, parent_folder_id: input.parentFolderId || null })
+    .select('id')
+    .single();
+  if (error || !data) {
+    console.error('Error creating curriculum folder:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function deleteCurriculumFolder(folderId: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_folders').delete().eq('id', folderId);
+  if (error) {
+    console.error('Error deleting curriculum folder:', error);
+    return false;
+  }
+  return true;
+}
+
+// خطط الدروس
+export async function getCurriculumLessonPlans(grade: string, subject: string): Promise<{ id: string; title: string; content: string; weekNumber: number | null }[]> {
+  const { data, error } = await supabase
+    .from('curriculum_lesson_plans')
+    .select('id, title, content, week_number')
+    .eq('grade', grade)
+    .eq('subject', subject)
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching lesson plans:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', weekNumber: row.week_number }));
+}
+
+export async function createCurriculumLessonPlan(input: { grade: string; subject: string; title: string; content: string; weekNumber?: number | null }): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('curriculum_lesson_plans')
+    .insert({ grade: input.grade, subject: input.subject, title: input.title, content: input.content, week_number: input.weekNumber ?? null })
+    .select('id')
+    .single();
+  if (error || !data) {
+    console.error('Error creating lesson plan:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function deleteCurriculumLessonPlan(planId: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_lesson_plans').delete().eq('id', planId);
+  if (error) {
+    console.error('Error deleting lesson plan:', error);
+    return false;
+  }
+  return true;
+}

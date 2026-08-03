@@ -349,7 +349,7 @@ const App: React.FC = () => {
       case 'curriculum':
         return <CurriculumHub language={language} onNavigate={setActiveView} />;
       case 'curr-setup':
-        return <Curriculum language={language} />;
+        return <Curriculum language={language} permissions={userPermissions} />;
       case 'gradebook':
         return <Gradebook role={user.role} language={language} permissions={userPermissions} />;
       case 'analytics':
