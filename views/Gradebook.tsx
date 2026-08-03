@@ -147,6 +147,61 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     });
   };
 
+  // بيحسب الدرجة النهائية الحقيقية لطالب في تقييمات معيّنة، بنفس منطق الأوزان المستخدم في نظام الدرجات
+  const computeWeightedGrade = (assessments: any[], entries: any[], categoryWeights: Record<string, number>, studentId: string): number => {
+    const catScores: Record<string, { total: number; max: number }> = {};
+    assessments.forEach((a: any) => {
+      const entry = entries.find((e: any) => e.studentId === studentId && e.assessmentId === a.id);
+      const score = entry ? entry.score : null;
+      const status = entry ? entry.status : 'Missing';
+      if (score !== null && status !== 'Excused') {
+        if (!catScores[a.category]) catScores[a.category] = { total: 0, max: 0 };
+        catScores[a.category].total += status === 'Late' ? score * 0.9 : score;
+        catScores[a.category].max += a.maxScore;
+      } else if (status === 'Missing') {
+        if (!catScores[a.category]) catScores[a.category] = { total: 0, max: 0 };
+        catScores[a.category].max += a.maxScore;
+      }
+    });
+    let totalWeighted = 0, totalWeightUsed = 0;
+    Object.keys(catScores).forEach(cat => {
+      const weight = categoryWeights[cat] || 0;
+      const data = catScores[cat];
+      if (data.max > 0) {
+        totalWeighted += (data.total / data.max) * 100 * (weight / 100);
+        totalWeightUsed += weight;
+      }
+    });
+    return totalWeightUsed === 0 ? 0 : Math.round(totalWeighted / totalWeightUsed);
+  };
+
+  // كل المواد المعتمدة الحقيقية اللي تخص صف الفصل اللي بنراقبه دلوقتي، ودرجات الطلاب الحقيقية فيها
+  const [allSubjectsConfigs, setAllSubjectsConfigs] = useState<{ id: string; name: string; categoryWeights: Record<string, number> }[]>([]);
+  const [allSubjectsGrades, setAllSubjectsGrades] = useState<Record<string, Record<string, number>>>({});
+
+  React.useEffect(() => {
+    if (!supervisionClassId) { setAllSubjectsConfigs([]); setAllSubjectsGrades({}); return; }
+    const cls = realClassSections.find((c: any) => c.id === supervisionClassId);
+    if (!cls) return;
+    const applicable = gradebooksData.filter((g: any) => g.status === 'approved' && g.gradesList?.includes(cls.gradeLevel));
+    const configsSummary = applicable.map((g: any) => ({ id: g.id, name: g.name, categoryWeights: g.categoryWeights || {} }));
+    setAllSubjectsConfigs(configsSummary);
+    const classStudentIds: string[] = cls.students || [];
+
+    Promise.all(applicable.map((g: any) => Promise.all([getAssessments(g.id), getGradeEntries(g.id)]))).then((results) => {
+      const gradesMap: Record<string, Record<string, number>> = {};
+      applicable.forEach((g: any, idx: number) => {
+        const [assessments, entries] = results[idx];
+        const studentGrades: Record<string, number> = {};
+        classStudentIds.forEach((sid) => {
+          studentGrades[sid] = computeWeightedGrade(assessments as any[], entries as any[], g.categoryWeights || {}, sid);
+        });
+        gradesMap[g.id] = studentGrades;
+      });
+      setAllSubjectsGrades(gradesMap);
+    });
+  }, [supervisionClassId, gradebooksData, realClassSections]);
+
   React.useEffect(() => {
     refreshGradeData();
     const realConfig = selectedClassId ? (gradebooksData.find(g => g.id === selectedClassId) as any) : null;
@@ -707,7 +762,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                            });
                            await updateGradebookConfigStatus(selectedClassId, 'approved');
                            refreshConfigs();
-                           showToast('تم اعتماد نظام الدرجات ونشره.', 'success');
+                           showToast(`تم اعتماد نظام الدرجات "${subjectNameInput}" ونشره بنجاح.`, 'success');
                          } else {
                            // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة، ونعتمده على طول
                            const newId = await createGradebookConfig({
@@ -719,14 +774,15 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                            if (newId) {
                              await updateGradebookConfigStatus(newId, 'approved');
                              refreshConfigs();
-                             setSelectedClassId(newId);
-                             showToast('تم إنشاء نظام الدرجات واعتماده بنجاح.', 'success');
+                             showToast(`تم إنشاء نظام الدرجات "${subjectNameInput}" واعتماده بنجاح.`, 'success');
                            } else {
                              showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
                              return;
                            }
                          }
-                         setActiveTab('teacher');
+                         // مش بننقّل المستخدم لأي مكان تاني — ممكن يكون شخص تاني هو اللي هيراقب الفصول بعدين.
+                         // بس نرجّع الشاشة لوضع "إنشاء جديد" فاضي جاهز
+                         setSelectedClassId(null);
                          setAdminStep(1);
                        } else {
                          setAdminStep(s => Math.min(3, s + 1));
@@ -1356,18 +1412,44 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
                 {!isPendingSchema && (
                    <div className="flex justify-center gap-4">
-                      <Button variant="secondary" className="px-6 shadow-none border max-w-xs text-sm">حفظ كمسودة</Button>
+                      <Button variant="secondary" className="px-6 shadow-none border max-w-xs text-sm" onClick={async () => {
+                         if (!subjectNameInput.trim() || selectedTargetGrades.length === 0) return;
+                         if (selectedClassId) {
+                           await updateGradebookConfig({ configId: selectedClassId, subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                           refreshConfigs();
+                           showToast('تم حفظ المسودة.', 'success');
+                         } else {
+                           const newId = await createGradebookConfig({ subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                           if (newId) { refreshConfigs(); showToast('تم حفظ المسودة.', 'success'); setSelectedClassId(null); setAdminStep(1); }
+                           else showToast('حصل خطأ أثناء الحفظ.', 'error');
+                         }
+                      }}>حفظ كمسودة</Button>
                       <Button 
                         className="bg-purple-600 text-white shadow-none px-10 py-3 text-lg" 
-                        disabled={totalWeight !== 100}
-                        onClick={() => {
-                           setStatus('pending');
-                           setActiveTab('teacher');
+                        disabled={totalWeight !== 100 || !subjectNameInput.trim() || selectedTargetGrades.length === 0}
+                        onClick={async () => {
+                           setStatus('approved');
+                           if (selectedClassId) {
+                             await updateGradebookConfig({ configId: selectedClassId, subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                             await updateGradebookConfigStatus(selectedClassId, 'approved');
+                             refreshConfigs();
+                             showToast(`تم اعتماد نظام الدرجات "${subjectNameInput}" ونشره بنجاح.`, 'success');
+                           } else {
+                             const newId = await createGradebookConfig({ subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                             if (newId) {
+                               await updateGradebookConfigStatus(newId, 'approved');
+                               refreshConfigs();
+                               showToast(`تم إنشاء نظام الدرجات "${subjectNameInput}" واعتماده بنجاح.`, 'success');
+                             } else {
+                               showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
+                               return;
+                             }
+                           }
                            setAdminStep(1);
                            setSelectedClassId(null);
                         }}
                       >
-                         إرسال لطلب الاعتماد
+                         اعتماد
                       </Button>
                    </div>
                 )}
@@ -1425,29 +1507,13 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     const eligibleStudents = supervisedClass
       ? realStudents.filter(s => (supervisedClass.students || []).includes(s.id))
       : realStudents.filter(s => (selectedClass?.gradesList || []).includes(s.grade));
-    const subjects = ['جميع المواد', 'الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
-    const displaySubjects = ['الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
+    const subjects = ['جميع المواد', ...allSubjectsConfigs.map(c => c.name)];
+    const displaySubjects = allSubjectsConfigs.map(c => c.name);
 
-    const getMockSubjectGrade = (studentId: string, subject: string, termId: string) => {
-      let hash = 0;
-      const str = `${studentId}-${subject}-${termId}`;
-      for (let i = 0; i < str.length; i++) {
-        hash = str.charCodeAt(i) + ((hash << 5) - hash);
-      }
-      return Math.floor(40 + Math.abs(Math.sin(hash)) * 60);
-    };
-
-    const getStudentSubjectGrade = (studentId: string, subject: string, termId: string) => {
-      if (subject === 'Mathematics') {
-         return termId === 'year' ? calculateYearFinal(studentId) : calculateFinalGrade(studentId, termId);
-      }
-      if (termId === 'year') {
-         const t1 = getMockSubjectGrade(studentId, subject, 't1');
-         const t2 = getMockSubjectGrade(studentId, subject, 't2');
-         const t3 = getMockSubjectGrade(studentId, subject, 't3');
-         return Math.round((t1 + t2 + t3) / 3);
-      }
-      return getMockSubjectGrade(studentId, subject, termId);
+    const getStudentSubjectGrade = (studentId: string, subject: string, _termId: string) => {
+      const cfg = allSubjectsConfigs.find(c => c.name === subject);
+      if (!cfg) return 0;
+      return allSubjectsGrades[cfg.id]?.[studentId] ?? 0;
     };
     
     return (
