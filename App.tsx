@@ -351,7 +351,7 @@ const App: React.FC = () => {
       case 'curr-setup':
         return <Curriculum language={language} />;
       case 'gradebook':
-        return <Gradebook role={user.role} language={language} />;
+        return <Gradebook role={user.role} language={language} permissions={userPermissions} />;
       case 'analytics':
         return <Analytics role={user.role} language={language} />;
       case 'settings':

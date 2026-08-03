@@ -1,6 +1,13 @@
 import React, { useState } from 'react';
 import { Language, UserRole, GradebookConfig, GradeEntry, AssessmentCategory, GradingTerm, GradingScaleRule, Assessment } from '../types';
-import { MOCK_GRADEBOOK, STUDENTS, CLASSES } from '../services/mockData';
+import { MOCK_GRADEBOOK } from '../services/mockData';
+import {
+  getGradebookConfigs, createGradebookConfig, updateGradebookConfigStatus,
+  getOrCreateDefaultTerm, getAssessments, createAssessment as createAssessmentSvc, deleteAssessment as deleteAssessmentSvc,
+  getGradeEntries, saveGradeEntries, getStudents
+} from '../services/supabaseData';
+import { showToast } from '../components/Toast';
+import { confirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/Button';
 import { 
   FileSpreadsheet, 
@@ -42,9 +49,117 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } 
 interface GradebookProps {
   role: UserRole;
   language: Language;
+  permissions?: string[];
 }
 
-export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
+const GRADE_OPTIONS_GB = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+
+const CreateGradebookConfigModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
+  const [form, setForm] = useState({
+    subjectName: '',
+    grades: [] as string[],
+    passingScore: 60,
+    categoryWeights: { 'الاختبارات القصيرة': 20, 'الواجبات': 20, 'المشاريع': 20, 'الاختبار النهائي': 40 } as Record<string, number>,
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const toggleGrade = (grade: string) => {
+    setForm(prev => ({ ...prev, grades: prev.grades.includes(grade) ? prev.grades.filter(g => g !== grade) : [...prev.grades, grade] }));
+  };
+
+  const totalWeight = Object.values(form.categoryWeights).reduce((a, b) => a + b, 0);
+
+  const handleSubmit = async () => {
+    if (!form.subjectName.trim() || form.grades.length === 0) return;
+    setIsSubmitting(true);
+    const ok = await onSubmit(form);
+    setIsSubmitting(false);
+    if (ok) onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100 max-h-[90vh] overflow-y-auto">
+        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+          <h3 className="text-xl font-bold text-gray-900">إنشاء نظام درجات جديد</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><XIcon size={20} /></button>
+        </div>
+        <div className="p-6 space-y-5">
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">اسم المادة</label>
+            <input
+              type="text"
+              placeholder="مثال: الرياضيات"
+              value={form.subjectName}
+              onChange={(e) => setForm({ ...form, subjectName: e.target.value })}
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف المشتركة في نفس نظام الدرجات ده (اختيار متعدد)</label>
+            <div className="flex flex-wrap gap-2">
+              {GRADE_OPTIONS_GB.map(grade => (
+                <button
+                  type="button"
+                  key={grade}
+                  onClick={() => toggleGrade(grade)}
+                  className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${
+                    form.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                  }`}
+                >
+                  {grade}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">درجة النجاح</label>
+            <input
+              type="number"
+              value={form.passingScore}
+              onChange={(e) => setForm({ ...form, passingScore: Number(e.target.value) })}
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium"
+            />
+          </div>
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="block text-sm font-bold text-gray-700">أوزان فئات التقييم</label>
+              <span className={`text-xs font-bold ${totalWeight === 100 ? 'text-green-600' : 'text-amber-600'}`}>{totalWeight}% من 100%</span>
+            </div>
+            <div className="space-y-2">
+              {Object.entries(form.categoryWeights).map(([cat, weight]) => (
+                <div key={cat} className="flex items-center gap-3">
+                  <span className="text-sm text-gray-700 flex-1">{cat}</span>
+                  <input
+                    type="number"
+                    value={weight}
+                    onChange={(e) => setForm({ ...form, categoryWeights: { ...form.categoryWeights, [cat]: Number(e.target.value) } })}
+                    className="w-20 p-2 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-violet-500 text-sm text-center"
+                  />
+                  <span className="text-sm text-gray-400">%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+          <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
+          <Button
+            className="bg-violet-600 text-white hover:bg-violet-700 shadow-sm flex-1"
+            onClick={handleSubmit}
+            disabled={!form.subjectName.trim() || form.grades.length === 0 || isSubmitting}
+          >
+            {isSubmitting ? 'جاري الإنشاء...' : 'إنشاء'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const Gradebook: React.FC<GradebookProps> = ({ role, language, permissions = [] }) => {
+  const canEnterGrades = permissions.length === 0 || permissions.includes('grades_enter');
+  const canApproveGrades = permissions.length === 0 || permissions.includes('grades_approve');
   const [config, setConfig] = useState<GradebookConfig>(MOCK_GRADEBOOK);
   const [activeTab, setActiveTab] = useState<'admin' | 'teacher' | 'approvals'>(role === UserRole.ADMIN ? 'admin' : 'teacher');
   const [adminStep, setAdminStep] = useState(1);
@@ -52,12 +167,52 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
   const [editedEntries, setEditedEntries] = useState<Record<string, number | null>>({});
   const [isAddingAssessment, setIsAddingAssessment] = useState(false);
   const [status, setStatus] = useState<'draft' | 'pending' | 'approved'>('draft');
-  const [gradebooksData, setGradebooksData] = useState([
-    { id: 'c-10a', name: 'سجل أعمال السنة - الفصل الأول', grades: 'الصف العاشر', students: '320 طالب', year: '2024-2025', status: 'pending' as const },
-    { id: 'c-11b', name: 'التقييم الشامل - مسار العلوم', grades: 'الصف الحادي عشر والثاني عشر', students: '450 طالب', year: '2024-2025', status: 'pending' as const },
-    { id: 'c-12c', name: 'مخطط اختبارات منتصف الفصل', grades: 'الصف التاسع', students: '280 طالب', year: '2024-2025', status: 'pending' as const },
-    { id: 'c-9d', name: 'سجل أعمال السنة - التقييمات التكوينية', grades: 'الصف الثامن', students: '310 طالب', year: '2024-2025', status: 'draft' as const },
-  ]);
+  const [gradebooksData, setGradebooksData] = useState<{ id: string; name: string; grades: string; gradesList: string[]; students: string; year: string; status: 'draft' | 'pending' | 'approved' | 'archived' }[]>([]);
+  const [configsLoading, setConfigsLoading] = useState(true);
+  const [realStudents, setRealStudents] = useState<any[]>([]);
+  const [defaultTermId, setDefaultTermId] = useState<string>('');
+  React.useEffect(() => {
+    if (defaultTermId) setActiveTermId(defaultTermId);
+  }, [defaultTermId]);
+  const [isCreateConfigOpen, setIsCreateConfigOpen] = useState(false);
+
+  const handleCreateConfig = async (form: any): Promise<boolean> => {
+    const id = await createGradebookConfig({
+      subjectName: form.subjectName,
+      grades: form.grades,
+      passingScore: form.passingScore,
+      categoryWeights: form.categoryWeights,
+    });
+    if (id) {
+      refreshConfigs();
+      showToast('تم إنشاء نظام الدرجات بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الإنشاء. تأكد إنك شغّلت كود SQL بتاع الدرجات في Supabase.', 'error');
+    }
+    return !!id;
+  };
+
+  const refreshConfigs = () => {
+    setConfigsLoading(true);
+    getGradebookConfigs().then((configs) => {
+      setGradebooksData(configs.map(c => ({
+        id: c.id,
+        name: c.subjectName,
+        grades: c.grades.join('، '),
+        gradesList: c.grades,
+        students: '',
+        year: c.academicYear || '',
+        status: c.status as any,
+      })));
+      setConfigsLoading(false);
+    });
+  };
+
+  React.useEffect(() => {
+    refreshConfigs();
+    getStudents().then(setRealStudents);
+    getOrCreateDefaultTerm().then(t => setDefaultTermId(t.id));
+  }, []);
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [selectedAtRiskطلاب, setSelectedAtRiskطلاب] = useState<string[]>([]);
   const [showMessagingDrawer, setShowMessagingDrawer] = useState(false);
@@ -78,6 +233,25 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
 
   // Class Selection State
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
+
+  // بيجيب التقييمات والدرجات الحقيقية أول ما تختار إعداد درجات معيّن
+  const refreshGradeData = () => {
+    if (!selectedClassId) return;
+    Promise.all([getAssessments(selectedClassId), getGradeEntries(selectedClassId)]).then(([assessments, entries]) => {
+      setConfig(prev => ({ ...prev, assessments: assessments as any, entries: entries as any }));
+    });
+  };
+
+  React.useEffect(() => {
+    refreshGradeData();
+    if (selectedClassId && defaultTermId) {
+      setConfig(prev => ({
+        ...prev,
+        terms: [{ id: defaultTermId, name: 'الفصل الدراسي الأول', startDate: '', endDate: '', status: 'Active' }],
+      }));
+    }
+  }, [selectedClassId, defaultTermId]);
+
   const [selectedSubject, setSelectedSubject] = useState('الرياضيات');
   const [isSubjectMenuOpen, setIsSubjectMenuOpen] = useState(false);
   const [classFilters, setClassFilters] = useState({
@@ -114,7 +288,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
 
   const getStudentScore = (studentId: string, assessmentId: string) => {
     // Check if being edited currently
-    const editKey = `${studentId}-${assessmentId}`;
+    const editKey = `${studentId}::${assessmentId}`;
     if (editedEntries.hasOwnProperty(editKey)) {
       return editedEntries[editKey];
     }
@@ -193,51 +367,53 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
     const num = val === '' ? null : Number(val);
     setEditedEntries(prev => ({
       ...prev,
-      [`${studentId}-${assessmentId}`]: num
+      [`${studentId}::${assessmentId}`]: num
     }));
   };
 
-  const handleSaveGrades = () => {
-    // Merge edited entries into config
-    const newEntries = [...config.entries];
-    Object.keys(editedEntries).forEach(key => {
-      const [sid, aid] = key.split('-');
-      const index = newEntries.findIndex(e => e.studentId === sid && e.assessmentId === aid);
-      if (index >= 0) {
-        newEntries[index].score = editedEntries[key];
-      } else {
-        newEntries.push({
-          studentId: sid,
-          assessmentId: aid,
-          score: editedEntries[key],
-          status: 'Graded' // Default
-        });
-      }
+  const [isSavingGrades, setIsSavingGrades] = useState(false);
+
+  const handleSaveGrades = async () => {
+    if (Object.keys(editedEntries).length === 0) return;
+    setIsSavingGrades(true);
+    const records = Object.keys(editedEntries).map(key => {
+      const [sid, aid] = key.split('::');
+      return { studentId: sid, assessmentId: aid, score: editedEntries[key], status: 'Graded' };
     });
-    setConfig({...config, entries: newEntries});
-    setEditedEntries({});
+    const ok = await saveGradeEntries(records);
+    setIsSavingGrades(false);
+    if (ok) {
+      refreshGradeData();
+      setEditedEntries({});
+      showToast('تم حفظ الدرجات بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء حفظ الدرجات. تأكد إنك شغّلت كود SQL بتاع الدرجات في Supabase.', 'error');
+    }
   };
 
-  const handleCreateAssessment = () => {
-    if (!newAssessment.title) return;
-    
-    const assessment: Assessment = {
-      id: `a-${Date.now()}`,
+  const [isCreatingAssessment, setIsCreatingAssessment] = useState(false);
+
+  const handleCreateAssessment = async () => {
+    if (!newAssessment.title || !selectedClassId) return;
+    setIsCreatingAssessment(true);
+    const id = await createAssessmentSvc({
+      configId: selectedClassId,
+      termId: activeTermId,
       title: newAssessment.title,
       category: newAssessment.category,
       maxScore: newAssessment.gradingType === 'Percentage' ? 100 : newAssessment.maxScore,
-      startDate: newAssessment.startDate,
       date: newAssessment.date,
-      termId: activeTermId,
-      isGraded: newAssessment.isGraded,
-      gradingType: newAssessment.gradingType
-    };
-    
-    setConfig({
-      ...config,
-      assessments: [...config.assessments, assessment]
     });
-    
+    setIsCreatingAssessment(false);
+
+    if (id) {
+      refreshGradeData();
+      showToast('تم إضافة التقييم بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء إضافة التقييم. تأكد إنك شغّلت كود SQL بتاع الدرجات في Supabase.', 'error');
+      return;
+    }
+
     setIsAddingAssessment(false);
     setNewAssessment({
       title: '',
@@ -283,7 +459,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                  className="appearance-none w-full p-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium text-gray-800 transition-all cursor-pointer hover:bg-gray-100/50 text-sm"
                >
                  <option value="All">جميع الصفوف</option>
-                 {Array.from(new Set(CLASSES.map(c => c.gradeLevel))).map(g => <option key={g} value={g}>{g}</option>)}
+                 {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g} value={g}>{g}</option>)}
                </select>
                <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
@@ -299,6 +475,9 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                </select>
                <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             </div>
+            <Button onClick={() => setIsCreateConfigOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
+               <Plus size={18} className="mr-2" /> إنشاء نظام درجات جديد
+            </Button>
           </div>
         </div>
       </div>
@@ -578,6 +757,11 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                      <Button className="bg-purple-600 text-white shadow-none" onClick={() => {
                        if (adminStep === 3) {
                          setStatus('pending');
+                         if (selectedClassId) {
+                           updateGradebookConfigStatus(selectedClassId, 'pending').then(ok => {
+                             if (ok) refreshConfigs();
+                           });
+                         }
                          setActiveTab('teacher');
                          setAdminStep(1);
                        } else {
@@ -612,9 +796,11 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
 
            {isPendingSchema && (
              <div className="flex justify-end gap-3 mb-6 p-4 bg-gray-50 rounded-lg border border-gray-100">
+               {canApproveGrades && (
                <button 
                   className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-5 py-2 rounded-md font-medium shadow-none transition-colors"
                   onClick={() => {
+                     if (selectedClassId) updateGradebookConfigStatus(selectedClassId, 'draft').then(() => refreshConfigs());
                      setGradebooksData(gradebooksData.map(g => g.id === selectedClassId ? { ...g, status: 'draft' } : g));
                      setActiveTab('approvals');
                      setSelectedClassId(null);
@@ -622,9 +808,12 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                >
                  إرجاع للتعديل
                </button>
+               )}
+               {canApproveGrades && (
                <button 
                   className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-md font-medium shadow-none transition-colors"
                   onClick={() => {
+                     if (selectedClassId) updateGradebookConfigStatus(selectedClassId, 'approved').then(() => refreshConfigs());
                      setGradebooksData(gradebooksData.map(g => g.id === selectedClassId ? { ...g, status: 'approved' } : g));
                      setActiveTab('approvals');
                      setSelectedClassId(null);
@@ -632,6 +821,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                >
                  اعتماد ونشر السجل
                </button>
+               )}
              </div>
            )}
 
@@ -1263,7 +1453,8 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
   };
 
   const TeacherView = () => {
-    const selectedClass = CLASSES.find(c => c.id === selectedClassId);
+    const selectedClass = gradebooksData.find(c => c.id === selectedClassId);
+    const eligibleStudents = realStudents.filter(s => (selectedClass?.gradesList || []).includes(s.grade));
     const subjects = ['جميع المواد', 'الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
     const displaySubjects = ['الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
 
@@ -1362,9 +1553,9 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                </div>
             </div>
             <div className="flex items-center gap-3 w-full lg:w-auto">
-               {Object.keys(editedEntries).length > 0 && (
-                  <Button variant="secondary" onClick={handleSaveGrades} className="text-xs">
-                     <Save size={16} /> حفظ كمسودة
+               {Object.keys(editedEntries).length > 0 && canEnterGrades && (
+                  <Button variant="secondary" onClick={handleSaveGrades} disabled={isSavingGrades} className="text-xs">
+                     <Save size={16} /> {isSavingGrades ? 'جاري الحفظ...' : 'حفظ كمسودة'}
                   </Button>
                )}
                {status === 'draft' && (
@@ -1445,7 +1636,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                    </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                   {STUDENTS.slice(0, 10).map((student) => {
+                   {eligibleStudents.map((student) => {
                       const finalGrade = activeTermId === 'year' ? calculateYearFinal(student.id) : calculateFinalGrade(student.id);
                       
                       let allSubjectsTotal = 0;
@@ -1510,7 +1701,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                                 {termAssessments.map(ass => {
                                    const score = getStudentScore(student.id, ass.id);
                                    const status = getEntryStatus(student.id, ass.id);
-                                   const isEditing = editedEntries.hasOwnProperty(`${student.id}-${ass.id}`);
+                                   const isEditing = editedEntries.hasOwnProperty(`${student.id}::${ass.id}`);
                                    const isFailing = score !== null && (score / ass.maxScore) < 0.5;
 
                                    return (
@@ -1562,7 +1753,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
                    <h3>طلاب في خطر</h3>
                  </div>
                  <div className="space-y-3 mb-6">
-                   {STUDENTS.slice(0, 10).map(student => {
+                   {eligibleStudents.map(student => {
                      const finalGrade = activeTermId === 'year' ? calculateYearFinal(student.id) : calculateFinalGrade(student.id);
                      if (finalGrade >= config.passingScore) return null;
                      
@@ -1622,7 +1813,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
             <div className="p-6 space-y-4">
               <div className="bg-blue-50 text-blue-800 p-3 rounded-xl text-sm border border-blue-100">
                 <strong>المستلمون:</strong> {selectedAtRiskطلاب.length > 0 
-                  ? STUDENTS.filter(s => selectedAtRiskطلاب.includes(s.id)).map(s => s.name).join(', ')
+                  ? eligibleStudents.filter(s => selectedAtRiskطلاب.includes(s.id)).map(s => s.name).join(', ')
                   : 'جميع الطلاب في خطر'}
               </div>
               <div>
@@ -1701,6 +1892,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
        )}
 
        {/* إضافة تقييم Modal */}
+       {isCreateConfigOpen && (
+         <CreateGradebookConfigModal onClose={() => setIsCreateConfigOpen(false)} onSubmit={handleCreateConfig} />
+       )}
+
        {isAddingAssessment && (
          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
@@ -1793,7 +1988,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language }) => {
              </div>
              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
                <Button variant="secondary" className="flex-1" onClick={() => setIsAddingAssessment(false)}>إلغاء</Button>
-               <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-sm flex-1" onClick={handleCreateAssessment} disabled={!newAssessment.title}>إنشاء</Button>
+               <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-sm flex-1" onClick={handleCreateAssessment} disabled={!newAssessment.title || isCreatingAssessment}>{isCreatingAssessment ? 'جاري الإضافة...' : 'إنشاء'}</Button>
              </div>
            </div>
          </div>

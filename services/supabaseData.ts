@@ -817,3 +817,213 @@ export async function getUserByCredentials(email: string, password: string): Pro
     permissions,
   };
 }
+
+// ================== الدرجات والتقييم (Gradebook) ==================
+
+// بيجيب كل الفصول الدراسية (الترمات)، ولو مفيش ولا واحد بينشئ فصل افتراضي أول مرة
+export async function getOrCreateDefaultTerm(): Promise<{ id: string; name: string }> {
+  const { data, error } = await supabase.from('grading_terms').select('id, name').order('created_at', { ascending: true });
+  if (!error && data && data.length > 0) {
+    return { id: data[0].id, name: data[0].name };
+  }
+  const { data: newTerm, error: insertError } = await supabase
+    .from('grading_terms')
+    .insert({ name: 'الفصل الدراسي الأول' })
+    .select('id, name')
+    .single();
+  if (insertError || !newTerm) {
+    console.error('Error creating default term:', insertError);
+    return { id: '', name: 'الفصل الدراسي الأول' };
+  }
+  return { id: newTerm.id, name: newTerm.name };
+}
+
+export async function getTerms(): Promise<{ id: string; name: string; startDate: string; endDate: string; status: string }[]> {
+  const { data, error } = await supabase.from('grading_terms').select('id, name, start_date, end_date, status').order('created_at', { ascending: true });
+  if (error) {
+    console.error('Error fetching terms:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    startDate: row.start_date ?? '',
+    endDate: row.end_date ?? '',
+    status: row.status ?? 'Active',
+  }));
+}
+
+export async function createTerm(name: string, startDate: string, endDate: string): Promise<string | null> {
+  const { data, error } = await supabase.from('grading_terms').insert({ name, start_date: startDate || null, end_date: endDate || null }).select('id').single();
+  if (error || !data) {
+    console.error('Error creating term:', error);
+    return null;
+  }
+  return data.id;
+}
+
+// بيجيب كل إعدادات الدرجات (مادة + الصفوف المشتركة فيها + حالة الاعتماد)
+export async function getGradebookConfigs(): Promise<{
+  id: string;
+  subjectName: string;
+  passingScore: number;
+  categoryWeights: Record<string, number>;
+  gradingDisplayType: string;
+  status: string;
+  academicYear: string;
+  grades: string[];
+}[]> {
+  const { data, error } = await supabase
+    .from('gradebook_configs')
+    .select('id, subject_name, passing_score, category_weights, grading_display_type, status, academic_year, gradebook_config_grades ( grade )');
+  if (error) {
+    console.error('Error fetching gradebook configs:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    subjectName: row.subject_name,
+    passingScore: row.passing_score,
+    categoryWeights: row.category_weights || {},
+    gradingDisplayType: row.grading_display_type || 'Points',
+    status: row.status,
+    academicYear: row.academic_year || '',
+    grades: (row.gradebook_config_grades || []).map((g: any) => g.grade),
+  }));
+}
+
+// بينشئ إعداد درجات جديد (مادة + صفوف مشتركة + أوزان الفئات)
+export async function createGradebookConfig(input: {
+  subjectName: string;
+  grades: string[];
+  passingScore: number;
+  categoryWeights: Record<string, number>;
+  academicYear?: string;
+}): Promise<string | null> {
+  const { data: configRow, error: configError } = await supabase
+    .from('gradebook_configs')
+    .insert({
+      subject_name: input.subjectName,
+      passing_score: input.passingScore,
+      category_weights: input.categoryWeights,
+      academic_year: input.academicYear || null,
+      status: 'draft',
+    })
+    .select('id')
+    .single();
+  if (configError || !configRow) {
+    console.error('Error creating gradebook config:', configError);
+    return null;
+  }
+  if (input.grades.length > 0) {
+    const rows = input.grades.map(g => ({ config_id: configRow.id, grade: g }));
+    const { error } = await supabase.from('gradebook_config_grades').insert(rows);
+    if (error) console.error('Error linking gradebook config to grades:', error);
+  }
+  return configRow.id;
+}
+
+export async function updateGradebookConfigStatus(configId: string, status: 'draft' | 'pending' | 'approved' | 'archived'): Promise<boolean> {
+  const { error } = await supabase.from('gradebook_configs').update({ status }).eq('id', configId);
+  if (error) {
+    console.error('Error updating gradebook config status:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيجيب التقييمات الحقيقية بتاعة إعداد درجات معيّن
+export async function getAssessments(configId: string): Promise<{ id: string; title: string; category: string; maxScore: number; date: string; termId: string; weight: number }[]> {
+  const { data, error } = await supabase
+    .from('assessments')
+    .select('id, title, category, max_score, date, term_id, weight')
+    .eq('config_id', configId)
+    .order('date', { ascending: true });
+  if (error) {
+    console.error('Error fetching assessments:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    title: row.title,
+    category: row.category,
+    maxScore: row.max_score,
+    date: row.date,
+    termId: row.term_id,
+    weight: row.weight ?? 100,
+  }));
+}
+
+export async function createAssessment(input: {
+  configId: string;
+  termId: string;
+  title: string;
+  category: string;
+  maxScore: number;
+  date: string;
+  weight?: number;
+}): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('assessments')
+    .insert({
+      config_id: input.configId,
+      term_id: input.termId,
+      title: input.title,
+      category: input.category,
+      max_score: input.maxScore,
+      date: input.date,
+      weight: input.weight ?? 100,
+    })
+    .select('id')
+    .single();
+  if (error || !data) {
+    console.error('Error creating assessment:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function deleteAssessment(assessmentId: string): Promise<boolean> {
+  const { error } = await supabase.from('assessments').delete().eq('id', assessmentId);
+  if (error) {
+    console.error('Error deleting assessment:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيجيب درجات كل الطلاب في كل تقييمات إعداد درجات معيّن، منظّمة (studentId-assessmentId -> score)
+export async function getGradeEntries(configId: string): Promise<{ studentId: string; assessmentId: string; score: number | null; status: string }[]> {
+  const { data, error } = await supabase
+    .from('grade_entries')
+    .select('student_id, assessment_id, score, status, assessments!inner(config_id)')
+    .eq('assessments.config_id', configId);
+  if (error) {
+    console.error('Error fetching grade entries:', error);
+    return [];
+  }
+  return (data as any[]).map(row => ({
+    studentId: row.student_id,
+    assessmentId: row.assessment_id,
+    score: row.score,
+    status: row.status,
+  }));
+}
+
+// بيحفظ مجموعة درجات دفعة واحدة (upsert)
+export async function saveGradeEntries(entries: { studentId: string; assessmentId: string; score: number | null; status: string }[]): Promise<boolean> {
+  if (entries.length === 0) return true;
+  const rows = entries.map(e => ({
+    student_id: e.studentId,
+    assessment_id: e.assessmentId,
+    score: e.score,
+    status: e.status,
+  }));
+  const { error } = await supabase.from('grade_entries').upsert(rows, { onConflict: 'assessment_id,student_id' });
+  if (error) {
+    console.error('Error saving grade entries:', error);
+    return false;
+  }
+  return true;
+}
+
