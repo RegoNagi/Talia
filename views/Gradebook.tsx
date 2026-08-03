@@ -42,7 +42,8 @@ import {
   MessageSquare,
   Send,
   ShieldCheck,
-  FolderPlus
+  FolderPlus,
+  FileWarning
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip } from 'recharts';
 
@@ -77,6 +78,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     if (defaultTermId) setActiveTermId(defaultTermId);
   }, [defaultTermId]);
   const [isCreateConfigOpen, setIsCreateConfigOpen] = useState(false);
+  const [adminView, setAdminView] = useState<'landing' | 'wizard' | 'draftsList'>('landing');
 
   const handleCreateConfig = async (form: any): Promise<boolean> => {
     const id = await createGradebookConfig({
@@ -558,6 +560,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   setSelectedClassId(schema.id);
                   setActiveTab('admin');
                   setAdminStep(1);
+                  setAdminView('wizard');
                 }}
               >
                 فتح للمراجعة
@@ -565,6 +568,68 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
             </div>
           </div>
         ))}
+      </div>
+    );
+  };
+
+  const AdminLandingView = () => {
+    const draftConfigs = gradebooksData.filter((g: any) => g.status === 'draft');
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-6 animate-fadeIn">
+        <div className={`grid gap-6 w-full max-w-3xl ${draftConfigs.length > 0 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 max-w-md'}`}>
+          {draftConfigs.length > 0 && (
+            <button
+              onClick={() => setAdminView('draftsList')}
+              className="bg-white border border-amber-200 hover:border-amber-400 rounded-3xl p-8 text-center transition-colors shadow-sm flex flex-col items-center gap-4"
+            >
+              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center text-amber-600">
+                <FileWarning size={32} />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">قوالب مرفوضة للتعديل</h3>
+                <p className="text-sm text-gray-500 mt-1">{draftConfigs.length} قالب محتاج مراجعة</p>
+              </div>
+            </button>
+          )}
+          <button
+            onClick={() => { setSelectedClassId(null); setAdminStep(1); setAdminView('wizard'); }}
+            className="bg-white border border-violet-200 hover:border-violet-400 rounded-3xl p-8 text-center transition-colors shadow-sm flex flex-col items-center gap-4"
+          >
+            <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
+              <Plus size={32} />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">إنشاء نظام درجات جديد</h3>
+              <p className="text-sm text-gray-500 mt-1">ابدأ إعداد نظام درجات من الصفر</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const AdminDraftsListView = () => {
+    const draftConfigs = gradebooksData.filter((g: any) => g.status === 'draft');
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <button onClick={() => setAdminView('landing')} className="flex items-center gap-2 text-sm font-bold text-violet-600 hover:underline">
+          <ArrowRight size={16} className="rotate-180" /> رجوع
+        </button>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {draftConfigs.map((g: any) => (
+            <button
+              key={g.id}
+              onClick={() => { setSelectedClassId(g.id); setAdminStep(1); setAdminView('wizard'); }}
+              className="text-right bg-white border border-amber-200 hover:border-amber-400 rounded-2xl p-5 transition-colors shadow-sm"
+            >
+              <p className="font-bold text-gray-900">{g.name}</p>
+              <p className="text-sm text-gray-500 mt-1">{g.grades}</p>
+            </button>
+          ))}
+          {draftConfigs.length === 0 && (
+            <p className="col-span-full text-center text-gray-400 py-10">مفيش قوالب مسودة دلوقتي.</p>
+          )}
+        </div>
       </div>
     );
   };
@@ -741,6 +806,9 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
         <div className="bg-gray-50 border-b border-gray-100 p-6">
            <div className="flex justify-between items-center mb-4">
              <div>
+               <button onClick={() => { setAdminView('landing'); setSelectedClassId(null); }} className="flex items-center gap-2 text-sm font-bold text-violet-600 hover:underline mb-2">
+                 <ArrowRight size={16} className="rotate-180" /> رجوع
+               </button>
                <h2 className="text-2xl font-bold text-gray-900">إعدادات سجل الدرجات</h2>
                <p className="text-sm text-gray-500">
                   تكوين قواعد التقييم ومسارات العمل لهذا المقرر.
@@ -788,6 +856,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                          }
                          // مش بننقّل المستخدم لأي مكان تاني — الاعتماد النهائي بيحصل من تاب "الاعتمادات"
                          setSelectedClassId(null);
+                         setAdminView('landing');
                          setAdminStep(1);
                        } else {
                          setAdminStep(s => Math.min(3, s + 1));
@@ -829,6 +898,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                      setGradebooksData(gradebooksData.map(g => g.id === selectedClassId ? { ...g, status: 'draft' } : g));
                      setActiveTab('admin');
                      setSelectedClassId(null);
+                     setAdminView('landing');
                   }}
                >
                  إرجاع للتعديل
@@ -858,6 +928,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                      refreshConfigs();
                      setActiveTab('approvals');
                      setSelectedClassId(null);
+                     setAdminView('landing');
                   }}
                >
                  اعتماد ونشر السجل
@@ -865,28 +936,6 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                )}
              </div>
            )}
-
-           {!selectedClassId && (() => {
-             const draftConfigs = gradebooksData.filter((g: any) => g.status === 'draft');
-             if (draftConfigs.length === 0) return null;
-             return (
-               <div className="max-w-4xl mx-auto mb-8 bg-amber-50 border border-amber-200 rounded-2xl p-5">
-                 <p className="text-sm font-bold text-amber-800 mb-3">قوالب مسودة محتاجة تعديل ({draftConfigs.length})</p>
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                   {draftConfigs.map((g: any) => (
-                     <button
-                       key={g.id}
-                       onClick={() => { setSelectedClassId(g.id); setAdminStep(1); }}
-                       className="text-right bg-white border border-amber-200 hover:border-amber-400 rounded-xl p-3 transition-colors"
-                     >
-                       <p className="font-bold text-gray-900 text-sm">{g.name}</p>
-                       <p className="text-xs text-gray-500">{g.grades}</p>
-                     </button>
-                   ))}
-                 </div>
-               </div>
-             );
-           })()}
 
            {adminStep === 1 && (() => {
              const selectedTemplateName = templates.find(t => t.id === activeTemplate)?.name || 'مخصص (بدون قالب)';
@@ -1490,6 +1539,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                            }
                            setAdminStep(1);
                            setSelectedClassId(null);
+                           setAdminView('landing');
                         }}
                       >
                          إرسال للاعتماد
@@ -1531,6 +1581,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                            }
                            setAdminStep(1);
                            setSelectedClassId(null);
+                           setAdminView('landing');
                         }}
                       >
                          اعتماد
@@ -1675,18 +1726,6 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   <Button variant="secondary" onClick={handleSaveGrades} disabled={isSavingGrades} className="text-xs">
                      <Save size={16} /> {isSavingGrades ? 'جاري الحفظ...' : 'حفظ كمسودة'}
                   </Button>
-               )}
-               {status === 'draft' && (
-                 <Button 
-                   variant="primary" 
-                   className="text-xs bg-purple-600 text-white shadow-none"
-                   onClick={() => {
-                     setStatus('pending');
-                     setSelectedClassId(null);
-                   }}
-                 >
-                   إرسال لطلب الاعتماد
-                 </Button>
                )}
                <Button variant="tonal" className="text-xs" onClick={() => setIsAddingAssessment(true)}>
                   <Plus size={16} /> إضافة تقييم
@@ -1976,7 +2015,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
              <div className="flex items-center gap-3">
                <div className="bg-white p-1 rounded-full border border-gray-200 shadow-sm flex items-center">
                   <button 
-                    onClick={() => setActiveTab('admin')}
+                    onClick={() => { setActiveTab('admin'); setAdminView('landing'); setSelectedClassId(null); }}
                     className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'admin' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
                   >
                     إعدادات الإدارة
@@ -2000,7 +2039,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   </button>
                </div>
                {activeTab === 'admin' && (
-                 <Button onClick={() => { setSelectedClassId(null); setAdminStep(1); }} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
+                 <Button onClick={() => { setSelectedClassId(null); setAdminStep(1); setAdminView('wizard'); }} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
                     <Plus size={18} className="mr-2" /> إنشاء نظام درجات جديد
                  </Button>
                )}
@@ -2010,6 +2049,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
        {!selectedClassId && activeTab === 'teacher' ? (
          ClassAndSubjectSelector()
+       ) : activeTab === 'admin' && adminView === 'landing' ? (
+         AdminLandingView()
+       ) : activeTab === 'admin' && adminView === 'draftsList' ? (
+         AdminDraftsListView()
        ) : activeTab === 'admin' ? (
          AdminJourney()
        ) : activeTab === 'approvals' ? (
