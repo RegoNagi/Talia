@@ -7,9 +7,9 @@ import { confirmDialog } from '../components/ConfirmDialog';
 import {
   getCurriculumSubjectsDetailed, addCurriculumSubject, removeCurriculumSubject,
   getCurriculumWeeks, saveCurriculumWeek, deleteCurriculumWeek,
-  getCurriculumResources, addCurriculumResource, deleteCurriculumResource,
+  getCurriculumResources, addCurriculumResource, updateCurriculumResource, deleteCurriculumResource,
   getCurriculumLessonPlans, createCurriculumLessonPlan, deleteCurriculumLessonPlan,
-  getCurriculumFolders, createCurriculumFolder, deleteCurriculumFolder,
+  getCurriculumFolders, createCurriculumFolder, renameCurriculumFolder, deleteCurriculumFolder,
   getAcademicYearSettings, saveAcademicYearSettings,
 } from '../services/supabaseData';
 import {
@@ -33,6 +33,7 @@ import {
   UploadCloud,
   FolderPlus,
   Users,
+  Pencil,
 } from 'lucide-react';
 
 interface CurriculumProps {
@@ -92,56 +93,6 @@ const AddSubjectModal: React.FC<{ grade: string; onClose: () => void; onSubmit: 
   );
 };
 
-const AddResourceModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
-  const [form, setForm] = useState({ title: '', type: 'Link', url: '' });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async () => {
-    if (!form.title.trim() || !form.url.trim()) return;
-    setIsSubmitting(true);
-    const ok = await onSubmit(form);
-    setIsSubmitting(false);
-    if (ok) onClose();
-  };
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
-        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-          <h3 className="text-xl font-bold text-gray-900">إضافة مصدر</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors"><XIcon size={20} /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">العنوان</label>
-            <input type="text" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="مثال: شرح الوحدة الأولى" className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">النوع</label>
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500">
-              <option value="Link">رابط</option>
-              <option value="Document">وثيقة</option>
-              <option value="Video">فيديو</option>
-              <option value="Presentation">عرض تقديمي</option>
-              <option value="SCORM">حزمة (SCORM)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1">الرابط (URL)</label>
-            <input type="text" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://..." className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" dir="ltr" />
-          </div>
-        </div>
-        <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
-          <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleSubmit} disabled={!form.title.trim() || !form.url.trim() || isSubmitting}>
-            {isSubmitting ? 'جاري الإضافة...' : 'إضافة'}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [] }) => {
   const isRTL = language === Language.AR;
   const canEditCurriculum = permissions.length === 0 || permissions.includes('curriculum_edit');
@@ -160,19 +111,23 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [loadingSubjectData, setLoadingSubjectData] = useState(false);
 
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
-  const [isAddResourceOpen, setIsAddResourceOpen] = useState(false);
   const [generatingLesson, setGeneratingLesson] = useState(false);
 
-  const [academicSettings, setAcademicSettings] = useState<{ system: string; startDate: string; academicYear: string } | null>(null);
+  const [academicSettings, setAcademicSettings] = useState<{ system: string; startDate: string; endDate: string; academicYear: string } | null>(null);
   const [loadingAcademicSettings, setLoadingAcademicSettings] = useState(true);
   const [pendingSystem, setPendingSystem] = useState<string | null>(null);
   const [pendingStartDate, setPendingStartDate] = useState('');
+  const [pendingEndDate, setPendingEndDate] = useState('');
   const [folders, setFolders] = useState<{ id: string; name: string; parentFolderId: string | null }[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
+  const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [addingTaskWeek, setAddingTaskWeek] = useState<number | null>(null);
   const [newTaskText, setNewTaskText] = useState('');
+  const [isAddingLink, setIsAddingLink] = useState(false);
+  const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
+  const [linkForm, setLinkForm] = useState({ title: '', type: 'Link', url: '' });
 
   const SYSTEM_OPTIONS = [
     { id: 'National', name: 'وطني', icon: 'flag' },
@@ -189,12 +144,13 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   }, []);
 
   const handleConfirmSystemSetup = async () => {
-    if (!pendingSystem || !pendingStartDate) return;
-    const year = new Date(pendingStartDate).getFullYear();
-    const academicYear = `${year}-${year + 1}`;
-    const ok = await saveAcademicYearSettings(pendingSystem, pendingStartDate, academicYear);
+    if (!pendingSystem || !pendingStartDate || !pendingEndDate) return;
+    const startYear = new Date(pendingStartDate).getFullYear();
+    const endYear = new Date(pendingEndDate).getFullYear();
+    const academicYear = startYear === endYear ? `${startYear}` : `${startYear}-${endYear}`;
+    const ok = await saveAcademicYearSettings(pendingSystem, pendingStartDate, pendingEndDate, academicYear);
     if (ok) {
-      setAcademicSettings({ system: pendingSystem, startDate: pendingStartDate, academicYear });
+      setAcademicSettings({ system: pendingSystem, startDate: pendingStartDate, endDate: pendingEndDate, academicYear });
       showToast('تم إعداد النظام التعليمي والعام الدراسي بنجاح.', 'success');
       setPendingSystem(null);
     } else {
@@ -213,7 +169,13 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     return { startDate: fmt(start), endDate: fmt(end) };
   };
 
-  const TOTAL_ACADEMIC_WEEKS = 36;
+  const TOTAL_ACADEMIC_WEEKS = (() => {
+    if (!academicSettings?.startDate || !academicSettings?.endDate) return 0;
+    const start = new Date(academicSettings.startDate);
+    const end = new Date(academicSettings.endDate);
+    const diffDays = Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
+    return Math.max(1, Math.ceil(diffDays / 7));
+  })();
 
   const handleAddTopicToWeek = async (weekNumber: number) => {
     if (!newTaskText.trim() || !selectedGrade || !selectedSubject) return;
@@ -331,16 +293,42 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     }
   };
 
-  const handleAddResource = async (form: any): Promise<boolean> => {
-    if (!selectedGrade || !selectedSubject) return false;
-    const id = await addCurriculumResource({ grade: selectedGrade, subject: selectedSubject, title: form.title, type: form.type, url: form.url });
+  const handleAddResource = async () => {
+    if (!selectedGrade || !selectedSubject || !linkForm.title.trim() || !linkForm.url.trim()) return;
+    const id = await addCurriculumResource({ grade: selectedGrade, subject: selectedSubject, title: linkForm.title, type: linkForm.type, url: linkForm.url, folderId: currentFolderId });
     if (id) {
       getCurriculumResources(selectedGrade, selectedSubject).then(setResources);
       showToast('تم إضافة المصدر بنجاح.', 'success');
+      setIsAddingLink(false);
+      setLinkForm({ title: '', type: 'Link', url: '' });
     } else {
       showToast('حصل خطأ أثناء إضافة المصدر.', 'error');
     }
-    return !!id;
+  };
+
+  const handleUpdateResource = async (resourceId: string) => {
+    if (!linkForm.title.trim() || !linkForm.url.trim() || !selectedGrade || !selectedSubject) return;
+    const ok = await updateCurriculumResource(resourceId, { title: linkForm.title, type: linkForm.type, url: linkForm.url });
+    if (ok) {
+      getCurriculumResources(selectedGrade, selectedSubject).then(setResources);
+      showToast('تم تعديل المصدر بنجاح.', 'success');
+      setEditingResourceId(null);
+    } else {
+      showToast('حصل خطأ أثناء التعديل.', 'error');
+    }
+  };
+
+  const handleRenameFolder = async (folderId: string) => {
+    if (!newFolderName.trim()) return;
+    const ok = await renameCurriculumFolder(folderId, newFolderName);
+    if (ok) {
+      refreshFolders();
+      showToast('تم تعديل اسم المجلد.', 'success');
+      setRenamingFolderId(null);
+      setNewFolderName('');
+    } else {
+      showToast('حصل خطأ أثناء التعديل.', 'error');
+    }
   };
 
   const handleDeleteResource = async (resourceId: string) => {
@@ -393,6 +381,57 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     s.department?.toLowerCase().includes(subjectSearchQuery.toLowerCase())
   );
 
+  if (!loadingAcademicSettings && !academicSettings) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-y-auto min-h-[calc(100vh-140px)]" dir="rtl">
+        <h2 className="text-3xl font-extrabold text-gray-900 mb-3">إعداد المناهج التعليمية</h2>
+        <p className="text-gray-500 mb-10">حدد الأطر التعليمية لإنشاء الدرجات والمواد والأكاديميات آلياً.</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl">
+          {SYSTEM_OPTIONS.map((sys) => {
+            const IconComp = sys.icon === 'flag' ? Flag : sys.icon === 'crown' ? Crown : sys.icon === 'globe' ? Globe2 : Star;
+            return (
+              <button
+                key={sys.id}
+                onClick={() => setPendingSystem(sys.id)}
+                className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center gap-4"
+              >
+                <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
+                  <IconComp size={28} />
+                </div>
+                <span className="font-bold text-gray-900">{sys.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {pendingSystem && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
+              <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
+                <h3 className="text-lg font-bold text-gray-900">مواعيد العام الدراسي</h3>
+                <button onClick={() => setPendingSystem(null)} className="text-gray-400 hover:text-gray-600"><XIcon size={20} /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ بداية العام الدراسي</label>
+                  <input type="date" value={pendingStartDate} onChange={(e) => setPendingStartDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ نهاية العام الدراسي</label>
+                  <input type="date" value={pendingEndDate} onChange={(e) => setPendingEndDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+              </div>
+              <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => setPendingSystem(null)}>إلغاء</Button>
+                <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleConfirmSystemSetup} disabled={!pendingStartDate || !pendingEndDate}>حفظ والمتابعة</Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col lg:flex-row h-full lg:h-[calc(100vh-140px)] animate-fadeIn gap-6 relative" dir="rtl">
 
@@ -442,48 +481,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       </div>
 
       <div className={`flex-1 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden flex flex-col ${(selectedGrade || selectedSubject) ? 'flex' : 'hidden lg:flex'}`}>
-        {!selectedGrade && !loadingAcademicSettings && !academicSettings ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center overflow-y-auto">
-            <h2 className="text-3xl font-extrabold text-gray-900 mb-3">إعداد المناهج التعليمية</h2>
-            <p className="text-gray-500 mb-10">حدد الأطر التعليمية لإنشاء الدرجات والمواد والأكاديميات آلياً.</p>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-3xl">
-              {SYSTEM_OPTIONS.map((sys) => {
-                const IconComp = sys.icon === 'flag' ? Flag : sys.icon === 'crown' ? Crown : sys.icon === 'globe' ? Globe2 : Star;
-                return (
-                  <button
-                    key={sys.id}
-                    onClick={() => setPendingSystem(sys.id)}
-                    className="bg-white rounded-3xl p-8 border border-gray-100 shadow-sm hover:shadow-lg transition-all flex flex-col items-center gap-4"
-                  >
-                    <div className="w-16 h-16 bg-violet-50 rounded-2xl flex items-center justify-center text-violet-600">
-                      <IconComp size={28} />
-                    </div>
-                    <span className="font-bold text-gray-900">{sys.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {pendingSystem && (
-              <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
-                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden border border-gray-100">
-                  <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                    <h3 className="text-lg font-bold text-gray-900">متى يبدأ العام الدراسي؟</h3>
-                    <button onClick={() => setPendingSystem(null)} className="text-gray-400 hover:text-gray-600"><XIcon size={20} /></button>
-                  </div>
-                  <div className="p-6 space-y-4">
-                    <label className="block text-sm font-bold text-gray-700 mb-1">تاريخ بداية العام الدراسي</label>
-                    <input type="date" value={pendingStartDate} onChange={(e) => setPendingStartDate(e.target.value)} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500" />
-                  </div>
-                  <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-3">
-                    <Button variant="secondary" className="flex-1" onClick={() => setPendingSystem(null)}>إلغاء</Button>
-                    <Button className="bg-violet-600 text-white hover:bg-violet-700 flex-1" onClick={handleConfirmSystemSetup} disabled={!pendingStartDate}>حفظ والمتابعة</Button>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        ) : !selectedGrade ? (
+        {!selectedGrade ? (
           <div className="flex-1 flex flex-col items-center justify-center text-gray-400 p-8 text-center">
             <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mb-6">
               <Folder size={48} className="text-gray-300" />
@@ -653,102 +651,173 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                           <UploadCloud size={32} />
                         </div>
                         <h3 className="font-bold text-gray-900 mb-1">رفع الموارد</h3>
-                        <p className="text-sm text-gray-500 mb-6">سحب وإفلات الملفات أو الاستيراد</p>
+                        <p className="text-sm text-gray-500 mb-1">سحب وإفلات الملفات أو الاستيراد</p>
+                        <p className="text-xs text-gray-400 mb-6">(رفع الملفات مباشرة مش متاح لسه، محتاج مساحة تخزين — استخدم رابط بدله)</p>
                         {canEditCurriculum && (
                           <div className="flex flex-wrap justify-center gap-3">
-                            {['رابط', 'وثيقة', 'فيديو', 'عرض تقديمي'].map((type) => (
+                            {[
+                              { label: 'رابط', type: 'Link' },
+                              { label: 'وثيقة', type: 'Document' },
+                              { label: 'فيديو', type: 'Video' },
+                              { label: 'عرض تقديمي', type: 'Presentation' },
+                            ].map(({ label, type }) => (
                               <button
                                 key={type}
-                                onClick={() => setIsAddResourceOpen(true)}
+                                onClick={() => { setIsAddingLink(true); setLinkForm({ title: '', type, url: '' }); }}
                                 className="px-4 py-2 bg-white border border-gray-100 rounded-full text-xs font-bold text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-none"
                               >
-                                + {type}
+                                + {label}
                               </button>
                             ))}
                           </div>
                         )}
                       </div>
 
-                      <div>
-                        <div className="flex justify-between items-center mb-4">
-                          <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                            المكتبة <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{folders.filter(f => f.parentFolderId === currentFolderId).length + resources.filter(r => r.folderId === currentFolderId).length}</span>
-                          </h3>
-                          <div className="flex gap-2 items-center">
-                            {currentFolderId && (
-                              <button onClick={() => setCurrentFolderId(null)} className="text-xs font-bold text-gray-500 hover:text-gray-900 flex items-center gap-1">
-                                <ArrowLeft size={14} /> رجوع
-                              </button>
-                            )}
-                            {canEditCurriculum && (
-                              <button onClick={() => setIsCreatingFolder(true)} className="text-xs font-bold text-violet-600 hover:bg-violet-50 px-2 py-1 rounded flex items-center gap-1">
-                                <FolderPlus size={14} /> مجلد جديد
-                              </button>
-                            )}
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2 text-sm">
+                          <button onClick={() => setCurrentFolderId(null)} className={`font-bold ${!currentFolderId ? 'text-gray-900' : 'text-gray-400 hover:text-gray-700'}`}>المكتبة</button>
+                          {currentFolderId && (
+                            <>
+                              <span className="text-gray-300">/</span>
+                              <span className="font-bold text-violet-700">{folders.find(f => f.id === currentFolderId)?.name}</span>
+                            </>
+                          )}
+                          <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">{folders.filter(f => f.parentFolderId === currentFolderId).length + resources.filter(r => r.folderId === currentFolderId).length}</span>
+                        </div>
+                        {canEditCurriculum && (
+                          <button onClick={() => setIsCreatingFolder(true)} className="text-xs font-bold text-violet-600 hover:bg-violet-50 px-2 py-1 rounded flex items-center gap-1">
+                            <FolderPlus size={14} /> مجلد جديد
+                          </button>
+                        )}
+                      </div>
+
+                      {isCreatingFolder && (
+                        <div className="p-4 bg-violet-50 rounded-2xl border border-violet-100 flex gap-2 animate-fadeIn">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={newFolderName}
+                            onChange={(e) => setNewFolderName(e.target.value)}
+                            placeholder="اسم المجلد..."
+                            className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
+                          />
+                          <Button onClick={handleCreateFolder} className="py-2 px-4 text-xs">إنشاء</Button>
+                          <button onClick={() => setIsCreatingFolder(false)} className="text-gray-400 hover:text-gray-600 px-2">إلغاء</button>
+                        </div>
+                      )}
+
+                      {isAddingLink && (
+                        <div className="p-4 bg-violet-50 rounded-2xl border border-violet-100 space-y-2 animate-fadeIn">
+                          <div className="flex gap-2">
+                            <input autoFocus type="text" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} placeholder="العنوان..." className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" />
+                            <select value={linkForm.type} onChange={(e) => setLinkForm({ ...linkForm, type: e.target.value })} className="bg-white border border-violet-200 rounded-xl px-2 text-sm focus:outline-none">
+                              <option value="Link">رابط</option>
+                              <option value="Document">وثيقة</option>
+                              <option value="Video">فيديو</option>
+                              <option value="Presentation">عرض تقديمي</option>
+                            </select>
+                          </div>
+                          <div className="flex gap-2">
+                            <input type="text" value={linkForm.url} onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })} placeholder="https://..." dir="ltr" className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500" onKeyDown={(e) => e.key === 'Enter' && handleAddResource()} />
+                            <Button onClick={handleAddResource} className="py-2 px-4 text-xs" disabled={!linkForm.title.trim() || !linkForm.url.trim()}>إضافة</Button>
+                            <button onClick={() => setIsAddingLink(false)} className="text-gray-400 hover:text-gray-600 px-2 text-xs">إلغاء</button>
                           </div>
                         </div>
+                      )}
 
-                        {isCreatingFolder && (
-                          <div className="mb-4 p-4 bg-violet-50 rounded-2xl border border-violet-100 flex gap-2 animate-fadeIn">
-                            <input
-                              autoFocus
-                              type="text"
-                              value={newFolderName}
-                              onChange={(e) => setNewFolderName(e.target.value)}
-                              placeholder="اسم المجلد..."
-                              className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
-                              onKeyDown={(e) => e.key === 'Enter' && handleCreateFolder()}
-                            />
-                            <Button onClick={handleCreateFolder} className="py-2 px-4 text-xs">إنشاء</Button>
-                            <button onClick={() => setIsCreatingFolder(false)} className="text-gray-400 hover:text-gray-600 px-2">إلغاء</button>
-                          </div>
-                        )}
-
-                        <div className="space-y-3">
-                          {folders.filter(f => f.parentFolderId === currentFolderId).map((folder) => (
-                            <div key={folder.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
-                              <div onClick={() => setCurrentFolderId(folder.id)} className="flex items-center gap-4 flex-1 cursor-pointer">
-                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
-                                  <Folder size={20} fill="currentColor" fillOpacity={0.2} />
+                      <div className="space-y-3">
+                        {folders.filter(f => f.parentFolderId === currentFolderId).map((folder) => (
+                          <div key={folder.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
+                            {renamingFolderId === folder.id ? (
+                              <div className="flex items-center gap-2 flex-1" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={newFolderName}
+                                  onChange={(e) => setNewFolderName(e.target.value)}
+                                  className="flex-1 bg-gray-50 border border-violet-200 rounded-lg px-2 py-1 text-sm focus:outline-none"
+                                  onKeyDown={(e) => e.key === 'Enter' && handleRenameFolder(folder.id)}
+                                />
+                                <button onClick={() => handleRenameFolder(folder.id)} className="text-xs font-bold text-violet-600">حفظ</button>
+                                <button onClick={() => setRenamingFolderId(null)} className="text-xs text-gray-400">إلغاء</button>
+                              </div>
+                            ) : (
+                              <>
+                                <div onClick={() => setCurrentFolderId(folder.id)} className="flex items-center gap-4 flex-1 cursor-pointer">
+                                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+                                    <Folder size={20} fill="currentColor" fillOpacity={0.2} />
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-gray-900 text-sm">{folder.name}</p>
+                                    <p className="text-xs text-gray-400">
+                                      {resources.filter(r => r.folderId === folder.id).length} عناصر • {folders.filter(f => f.parentFolderId === folder.id).length} مجلدات
+                                    </p>
+                                  </div>
                                 </div>
-                                <div>
-                                  <p className="font-bold text-gray-900 text-sm">{folder.name}</p>
-                                  <p className="text-xs text-gray-400">
-                                    {resources.filter(r => r.folderId === folder.id).length} عناصر • {folders.filter(f => f.parentFolderId === folder.id).length} مجلدات
-                                  </p>
+                                {canEditCurriculum && (
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => { setRenamingFolderId(folder.id); setNewFolderName(folder.name); }} className="text-gray-300 hover:text-violet-600 p-1">
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button onClick={() => handleDeleteFolder(folder.id)} className="text-gray-300 hover:text-red-500 p-1">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        ))}
+
+                        {resources.filter(r => r.folderId === currentFolderId).map((r) => (
+                          <div key={r.id} className="p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
+                            {editingResourceId === r.id ? (
+                              <div className="space-y-2">
+                                <div className="flex gap-2">
+                                  <input autoFocus type="text" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} className="flex-1 bg-gray-50 border border-violet-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
+                                  <select value={linkForm.type} onChange={(e) => setLinkForm({ ...linkForm, type: e.target.value })} className="bg-gray-50 border border-violet-200 rounded-lg px-2 text-sm focus:outline-none">
+                                    <option value="Link">رابط</option>
+                                    <option value="Document">وثيقة</option>
+                                    <option value="Video">فيديو</option>
+                                    <option value="Presentation">عرض تقديمي</option>
+                                  </select>
+                                </div>
+                                <div className="flex gap-2">
+                                  <input type="text" value={linkForm.url} onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })} dir="ltr" className="flex-1 bg-gray-50 border border-violet-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
+                                  <button onClick={() => handleUpdateResource(r.id)} className="text-xs font-bold text-violet-600 px-2">حفظ</button>
+                                  <button onClick={() => setEditingResourceId(null)} className="text-xs text-gray-400 px-2">إلغاء</button>
                                 </div>
                               </div>
-                              {canEditCurriculum && (
-                                <button onClick={() => handleDeleteFolder(folder.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
+                            ) : (
+                              <div className="flex items-center justify-between">
+                                <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-1">
+                                  <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
+                                    <Link2 size={18} />
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-gray-900 text-sm">{r.title}</p>
+                                    <p className="text-xs text-gray-400">{r.type}</p>
+                                  </div>
+                                </a>
+                                {canEditCurriculum && (
+                                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button onClick={() => { setEditingResourceId(r.id); setLinkForm({ title: r.title, type: r.type, url: r.url }); }} className="text-gray-300 hover:text-violet-600 p-1">
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button onClick={() => handleDeleteResource(r.id)} className="text-gray-300 hover:text-red-500 p-1">
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
 
-                          {resources.filter(r => r.folderId === currentFolderId).map((r) => (
-                            <div key={r.id} className="flex items-center justify-between p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
-                              <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 flex-1">
-                                <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-violet-50 text-violet-600">
-                                  <Link2 size={18} />
-                                </div>
-                                <div>
-                                  <p className="font-bold text-gray-900 text-sm">{r.title}</p>
-                                  <p className="text-xs text-gray-400">{r.type}</p>
-                                </div>
-                              </a>
-                              {canEditCurriculum && (
-                                <button onClick={() => handleDeleteResource(r.id)} className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <Trash2 size={16} />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-
-                          {folders.filter(f => f.parentFolderId === currentFolderId).length === 0 && resources.filter(r => r.folderId === currentFolderId).length === 0 && (
-                            <p className="text-center text-gray-400 py-10">المجلد فاضي — مفيش موارد أو مجلدات فرعية لسه.</p>
-                          )}
-                        </div>
+                        {folders.filter(f => f.parentFolderId === currentFolderId).length === 0 && resources.filter(r => r.folderId === currentFolderId).length === 0 && (
+                          <p className="text-center text-gray-400 py-10">المجلد فاضي — مفيش موارد أو مجلدات فرعية لسه.</p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -812,9 +881,6 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
 
       {isAddSubjectOpen && selectedGrade && (
         <AddSubjectModal grade={selectedGrade} onClose={() => setIsAddSubjectOpen(false)} onSubmit={handleAddSubject} />
-      )}
-      {isAddResourceOpen && (
-        <AddResourceModal onClose={() => setIsAddResourceOpen(false)} onSubmit={handleAddResource} />
       )}
     </div>
   );

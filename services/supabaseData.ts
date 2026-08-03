@@ -1214,6 +1214,15 @@ export async function addCurriculumResource(input: { grade: string; subject: str
   return data.id;
 }
 
+export async function updateCurriculumResource(resourceId: string, input: { title: string; type: string; url: string }): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_resources').update({ title: input.title, type: input.type, url: input.url }).eq('id', resourceId);
+  if (error) {
+    console.error('Error updating curriculum resource:', error);
+    return false;
+  }
+  return true;
+}
+
 export async function deleteCurriculumResource(resourceId: string): Promise<boolean> {
   const { error } = await supabase.from('curriculum_resources').delete().eq('id', resourceId);
   if (error) {
@@ -1244,6 +1253,15 @@ export async function createCurriculumFolder(input: { grade: string; subject: st
     return null;
   }
   return data.id;
+}
+
+export async function renameCurriculumFolder(folderId: string, name: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_folders').update({ name }).eq('id', folderId);
+  if (error) {
+    console.error('Error renaming curriculum folder:', error);
+    return false;
+  }
+  return true;
 }
 
 export async function deleteCurriculumFolder(folderId: string): Promise<boolean> {
@@ -1293,16 +1311,16 @@ export async function deleteCurriculumLessonPlan(planId: string): Promise<boolea
 }
 
 // إعداد النظام التعليمي والعام الدراسي (إعداد واحد عام)
-export async function getAcademicYearSettings(): Promise<{ system: string; startDate: string; academicYear: string } | null> {
-  const { data, error } = await supabase.from('academic_year_settings').select('system, start_date, academic_year').eq('id', 1).maybeSingle();
+export async function getAcademicYearSettings(): Promise<{ system: string; startDate: string; endDate: string; academicYear: string } | null> {
+  const { data, error } = await supabase.from('academic_year_settings').select('system, start_date, end_date, academic_year').eq('id', 1).maybeSingle();
   if (error || !data || !data.system) {
     return null;
   }
-  return { system: data.system, startDate: data.start_date, academicYear: data.academic_year || '' };
+  return { system: data.system, startDate: data.start_date, endDate: data.end_date, academicYear: data.academic_year || '' };
 }
 
-export async function saveAcademicYearSettings(system: string, startDate: string, academicYear: string): Promise<boolean> {
-  const { error } = await supabase.from('academic_year_settings').upsert({ id: 1, system, start_date: startDate, academic_year: academicYear });
+export async function saveAcademicYearSettings(system: string, startDate: string, endDate: string, academicYear: string): Promise<boolean> {
+  const { error } = await supabase.from('academic_year_settings').upsert({ id: 1, system, start_date: startDate, end_date: endDate, academic_year: academicYear });
   if (error) {
     console.error('Error saving academic year settings:', error);
     return false;
