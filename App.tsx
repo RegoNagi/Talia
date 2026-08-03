@@ -46,7 +46,7 @@ import taliaLogo from './assets/talia-360-logo.png';
 const App: React.FC = () => {
   const [language, setLanguage] = useState<Language>(Language.AR);
   const [activeView, setActiveView] = useState('moe-dashboard');
-  const [lessonPlanContext, setLessonPlanContext] = useState<{ mode: 'edit' | 'view'; planId: string } | null>(null);
+  const [lessonPlanContext, setLessonPlanContext] = useState<{ mode: 'edit' | 'view'; planId: string; returnView: string } | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedNav, setExpandedNav] = useState<Record<string, boolean>>({
     'moe-dashboard': true
@@ -321,9 +321,9 @@ const App: React.FC = () => {
       case 'attendance':
         return <Attendance role={user.role} language={language} user={user} permissions={userPermissions} />;
       case 'lessons-planner':
-        return <LessonPlanner language={language} permissions={userPermissions} editContext={lessonPlanContext} onExitContext={() => setLessonPlanContext(null)} />;
+        return <LessonPlanner language={language} permissions={userPermissions} editContext={lessonPlanContext} onExitContext={() => { const rv = lessonPlanContext?.returnView || 'lessons-library'; setLessonPlanContext(null); setActiveView(rv); }} />;
       case 'lessons-library':
-        return <LessonPlanLibrary language={language} permissions={userPermissions} onOpenPlan={(planId, mode) => { setLessonPlanContext({ planId, mode }); setActiveView('lessons-planner'); }} />;
+        return <LessonPlanLibrary language={language} permissions={userPermissions} onOpenPlan={(planId, mode) => { setLessonPlanContext({ planId, mode, returnView: 'lessons-library' }); setActiveView('lessons-planner'); }} />;
       case 'users':
       case 'users-admin':
       case 'users-teachers':
@@ -350,7 +350,7 @@ const App: React.FC = () => {
       case 'curriculum':
         return <CurriculumHub language={language} onNavigate={setActiveView} />;
       case 'curr-setup':
-        return <Curriculum language={language} permissions={userPermissions} />;
+        return <Curriculum language={language} permissions={userPermissions} onOpenLessonPlan={(planId) => { setLessonPlanContext({ planId, mode: 'view', returnView: 'curriculum' }); setActiveView('lessons-planner'); }} />;
       case 'gradebook':
         return <Gradebook role={user.role} language={language} permissions={userPermissions} />;
       case 'analytics':

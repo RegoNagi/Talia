@@ -40,6 +40,7 @@ import {
 interface CurriculumProps {
   language: Language;
   permissions?: string[];
+  onOpenLessonPlan?: (planId: string) => void;
 }
 
 const GRADE_LEVELS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
@@ -94,7 +95,7 @@ const AddSubjectModal: React.FC<{ grade: string; onClose: () => void; onSubmit: 
   );
 };
 
-export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [] }) => {
+export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = [], onOpenLessonPlan }) => {
   const isRTL = language === Language.AR;
   const canEditCurriculum = permissions.length === 0 || permissions.includes('curriculum_edit');
 
@@ -125,6 +126,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [newTaskText, setNewTaskText] = useState('');
   const [newTaskOutcome, setNewTaskOutcome] = useState('');
   const [newTaskResourceId, setNewTaskResourceId] = useState('');
+  const [newTaskLessonPlanId, setNewTaskLessonPlanId] = useState('');
   const [isAddingOutcome, setIsAddingOutcome] = useState(false);
   const [newOutcomeText, setNewOutcomeText] = useState('');
   const [learningOutcomes, setLearningOutcomes] = useState<{ id: string; outcome: string }[]>([]);
@@ -187,11 +189,14 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     const existing = weeks.find(w => w.weekNumber === weekNumber);
     const { startDate, endDate } = computeWeekDates(weekNumber);
     const linkedResource = resources.find(r => r.id === newTaskResourceId);
+    const linkedPlan = lessonPlans.find(p => p.id === newTaskLessonPlanId);
     const newTopic = {
       text: newTaskText.trim(),
       outcome: newTaskOutcome || null,
       resourceId: newTaskResourceId || null,
       resourceTitle: linkedResource?.title || null,
+      lessonPlanId: newTaskLessonPlanId || null,
+      lessonPlanTitle: linkedPlan?.title || null,
     };
     const topics = [...(existing?.topics || []), newTopic];
     const ok = await saveCurriculumWeek({ grade: selectedGrade, subject: selectedSubject, weekNumber, startDate, endDate, topics });
@@ -200,6 +205,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       setNewTaskText('');
       setNewTaskOutcome('');
       setNewTaskResourceId('');
+      setNewTaskLessonPlanId('');
       setAddingTaskWeek(null);
     } else {
       showToast('حصل خطأ أثناء حفظ المهمة.', 'error');
@@ -634,19 +640,23 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                       const text = isObj ? topic.text : topic;
                                       const outcome = isObj ? topic.outcome : null;
                                       const resourceTitle = isObj ? topic.resourceTitle : null;
+                                      const lessonPlanTitle = isObj ? topic.lessonPlanTitle : null;
                                       return (
                                         <div key={ti} className="p-2.5 bg-gray-50 rounded-lg text-sm font-medium text-gray-700">
                                           <div className="flex items-center gap-2">
                                             <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
                                             {text}
                                           </div>
-                                          {(outcome || resourceTitle) && (
+                                          {(outcome || resourceTitle || lessonPlanTitle) && (
                                             <div className="flex flex-wrap gap-2 mt-1.5 mr-3.5">
                                               {outcome && (
                                                 <span className="text-[10px] bg-violet-50 text-violet-700 border border-violet-100 px-2 py-0.5 rounded-full font-bold">🎯 {outcome}</span>
                                               )}
                                               {resourceTitle && (
                                                 <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-bold">🔗 {resourceTitle}</span>
+                                              )}
+                                              {lessonPlanTitle && (
+                                                <span className="text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-full font-bold">📘 {lessonPlanTitle}</span>
                                               )}
                                             </div>
                                           )}
@@ -677,6 +687,10 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                           {resources.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
                                         </select>
                                       </div>
+                                      <select value={newTaskLessonPlanId} onChange={(e) => setNewTaskLessonPlanId(e.target.value)} className="w-full bg-white border border-gray-200 rounded-xl px-2 py-2 text-xs outline-none">
+                                        <option value="">📘 ربط بخطة درس (اختياري)</option>
+                                        {lessonPlans.map(p => <option key={p.id} value={p.id}>{p.title}</option>)}
+                                      </select>
                                       {isAddingOutcome && (
                                         <div className="flex gap-2">
                                           <input
@@ -693,7 +707,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                         </div>
                                       )}
                                       <div className="flex gap-2 justify-end pt-1">
-                                        <button onClick={() => { setAddingTaskWeek(null); setNewTaskText(''); setNewTaskOutcome(''); setNewTaskResourceId(''); setIsAddingOutcome(false); }} className="text-xs text-gray-400 px-2">إلغاء</button>
+                                        <button onClick={() => { setAddingTaskWeek(null); setNewTaskText(''); setNewTaskOutcome(''); setNewTaskResourceId(''); setNewTaskLessonPlanId(''); setIsAddingOutcome(false); }} className="text-xs text-gray-400 px-2">إلغاء</button>
                                         <Button onClick={() => handleAddTopicToWeek(weekNumber)} className="text-xs px-4">حفظ</Button>
                                       </div>
                                     </div>
@@ -902,20 +916,12 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                     <div className="space-y-6">
                       <div className="flex justify-between items-center w-full mb-2 border-b border-slate-100 pb-4">
                         <h3 className="text-xl font-bold text-slate-800">خطط الدروس</h3>
-                        {canEditCurriculum && (
-                        <button
-                          onClick={handleGenerateAIPlan}
-                          disabled={generatingLesson}
-                          className="px-4 py-2 rounded-lg flex items-center gap-2 bg-gradient-to-r from-violet-600 to-fuchsia-500 text-white border-none shadow-sm hover:shadow-md transition font-bold disabled:opacity-60"
-                        >
-                          <Wand2 size={16} /> {generatingLesson ? 'جاري الإنشاء...' : 'إنشاء بالذكاء الاصطناعي'}
-                        </button>
-                        )}
+                        <p className="text-xs text-gray-400">أضف خطط من "مكتبة خطط الدروس" عن طريق زر الإضافة للمادة</p>
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {lessonPlans.map((p) => {
-                          let parsed: any = null;
-                          try { parsed = JSON.parse(p.content); } catch { parsed = null; }
+                          let parsed: any = { blocks: [], topic: '' };
+                          try { parsed = JSON.parse(p.content); } catch { parsed = { blocks: [], topic: '' }; }
                           return (
                             <div key={p.id} className="rounded-3xl shadow-sm border border-slate-100 p-6 flex items-start gap-6 hover:shadow-lg transition bg-white group relative">
                               <div className="w-12 h-12 rounded-xl bg-slate-50 text-slate-500 flex items-center justify-center shrink-0 border border-slate-100">
@@ -930,20 +936,26 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                   </button>
                                   )}
                                 </div>
-                                {parsed?.objectives && (
-                                  <p className="text-sm text-slate-500 leading-relaxed mb-3">{parsed.objectives.slice(0, 2).join(' • ')}</p>
+                                {parsed.topic && (
+                                  <p className="text-sm text-slate-500 leading-relaxed mb-3">الموضوع: {parsed.topic}</p>
                                 )}
-                                {parsed?.outline && (
+                                <div className="flex items-center justify-between">
                                   <div className="flex items-center gap-4 text-xs font-medium text-slate-400">
-                                    <span className="flex items-center gap-1"><Clock size={14} /> {parsed.outline.length} خطوات</span>
+                                    <span className="flex items-center gap-1"><Clock size={14} /> {parsed.blocks?.length || 0} عناصر</span>
                                   </div>
-                                )}
+                                  <button
+                                    onClick={() => onOpenLessonPlan?.(p.id)}
+                                    className="text-xs font-bold text-violet-600 hover:underline flex items-center gap-1"
+                                  >
+                                    معاينة →
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
                         })}
                         {lessonPlans.length === 0 && (
-                          <p className="col-span-full text-center text-gray-400 py-10">مفيش خطط دروس متعملة لسه.</p>
+                          <p className="col-span-full text-center text-gray-400 py-10">مفيش خطط دروس مضافة للمادة دي لسه.</p>
                         )}
                       </div>
                     </div>

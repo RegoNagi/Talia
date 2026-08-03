@@ -449,7 +449,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
 
         {/* Column 2: Live Document Preview & Library Action (Left Side in RTL) lg:col-span-8 */}
         <div className={`${isReadOnly ? 'lg:col-span-12' : 'lg:col-span-8'} bg-white rounded-3xl border border-gray-100 shadow-none p-8 h-full flex flex-col relative overflow-hidden`}>
-          {isReadOnly && (
+          {editContext && (
             <button onClick={onExitContext} className="flex items-center gap-2 text-sm font-bold text-violet-600 hover:underline mb-4 self-start">
               <ArrowLeftIcon size={16} /> رجوع للمكتبة
             </button>
@@ -463,6 +463,11 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                 <h2 
                   contentEditable={!isReadOnly} 
                   suppressContentEditableWarning 
+                  onBlur={(e) => {
+                    const text = (e.currentTarget.textContent || '').trim();
+                    const cleaned = text.replace(/^خطة درس:\s*/, '');
+                    if (cleaned && cleaned !== 'عنوان الدرس...') setTopic(cleaned);
+                  }}
                   className="text-2xl font-bold text-gray-900 outline-none focus:bg-gray-50 hover:bg-gray-50 rounded-lg p-1 min-w-[200px] transition-colors"
                 >
                   {topic ? `خطة درس: ${topic}` : 'عنوان الدرس...'}

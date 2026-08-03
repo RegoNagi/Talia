@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
-import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan, assignLessonPlanToSubject } from '../services/supabaseData';
+import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan, assignLessonPlanToSubject, getAllDistinctSubjects } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { 
@@ -27,8 +27,10 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
   const [selectedSubject, setSelectedSubject] = useState('');
   const [plans, setPlans] = useState<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string; assigned: boolean }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [allSubjects, setAllSubjects] = useState<string[]>([]);
 
   const isRTL = language === Language.AR;
+  const GRADE_LEVELS_LIB = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
 
   const refreshPlans = () => {
     setIsLoading(true);
@@ -40,10 +42,11 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
 
   useEffect(() => {
     refreshPlans();
+    getAllDistinctSubjects().then(setAllSubjects);
   }, []);
 
-  const grades = Array.from(new Set(plans.map(p => p.grade))).sort();
-  const subjects = Array.from(new Set(plans.map(p => p.subject))).sort();
+  const grades = GRADE_LEVELS_LIB;
+  const subjects = allSubjects;
 
   const filteredPlans = plans.filter(p =>
     p.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
@@ -141,67 +144,63 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
         {filteredPlans.map((plan) => {
           const { blocks, topic } = parseContent(plan.content);
           return (
-            <div key={plan.id} className="bg-white rounded-3xl border border-gray-100 hover:border-violet-200 hover:shadow-lg transition-all duration-300 flex flex-col overflow-hidden group shadow-sm">
-              <div className="p-6 flex-1">
-                <div className="flex justify-between items-start mb-4">
-                  <span className="bg-violet-50 text-violet-700 px-3 py-1 rounded-full text-xs font-bold border border-violet-100">
+            <div key={plan.id} className="bg-white rounded-2xl border border-gray-100 hover:border-violet-200 hover:shadow-md transition-all duration-200 flex flex-col overflow-hidden group">
+              <div className="p-5 flex-1">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="bg-violet-50 text-violet-700 px-2.5 py-1 rounded-full text-[11px] font-bold">
                     {plan.subject} · {plan.grade}
                   </span>
-                  <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500 group-hover:bg-violet-100 transition-colors shrink-0">
-                    <BookOpen size={16} />
-                  </div>
+                  {plan.assigned && (
+                    <span className="flex items-center gap-1 text-emerald-600" title="مضافة لخطط الدروس بتاعة المادة">
+                      <CheckCircle2 size={16} />
+                    </span>
+                  )}
                 </div>
 
-                <h3 className="text-lg font-extrabold text-gray-900 mb-1 line-clamp-1">{plan.title}</h3>
+                <h3 className="text-base font-bold text-gray-900 mb-1 line-clamp-1">{plan.title}</h3>
                 {topic && (
-                  <p className="text-sm text-gray-500 font-medium mb-3 line-clamp-1">الموضوع: {topic}</p>
+                  <p className="text-xs text-gray-400 font-medium mb-3 line-clamp-1">{topic}</p>
                 )}
 
-                <div className="flex items-center gap-3 text-xs font-bold text-gray-400 mt-3">
-                  <span className="flex items-center gap-1.5"><Layers size={13} /> {blocks.length} عناصر</span>
-                  {plan.createdAt && <span className="flex items-center gap-1.5"><Calendar size={13} /> {formatDate(plan.createdAt)}</span>}
+                <div className="flex items-center gap-3 text-[11px] font-medium text-gray-400">
+                  <span className="flex items-center gap-1"><Layers size={12} /> {blocks.length} عناصر</span>
+                  {plan.createdAt && <span className="flex items-center gap-1"><Calendar size={12} /> {formatDate(plan.createdAt)}</span>}
                 </div>
-
-                {plan.assigned && (
-                  <span className="inline-flex items-center gap-1 mt-3 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full">
-                    <CheckCircle2 size={12} /> مضافة لخطط الدروس بتاعة المادة
-                  </span>
-                )}
               </div>
 
-              <div className="flex gap-2 p-4 pt-0">
+              <div className="flex items-center gap-1.5 px-4 py-3 border-t border-gray-50">
                 <button 
                   onClick={() => onOpenPlan(plan.id, 'view')}
-                  className="flex-1 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm font-bold transition-colors"
+                  className="flex-1 text-gray-600 hover:text-violet-700 hover:bg-violet-50 rounded-lg py-2 flex items-center justify-center gap-1.5 text-xs font-bold transition-colors"
                 >
-                  <Eye size={16} />
+                  <Eye size={14} />
                   معاينة
                 </button>
                 {canEditLessonPlans && (
                   <button 
                     onClick={() => onOpenPlan(plan.id, 'edit')}
-                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-violet-50 hover:text-violet-600 rounded-xl flex items-center justify-center transition-colors"
+                    className="w-8 h-8 shrink-0 text-gray-400 hover:text-violet-600 hover:bg-violet-50 rounded-lg flex items-center justify-center transition-colors"
                     title="تعديل"
                   >
-                    <Pencil size={16} />
+                    <Pencil size={14} />
                   </button>
                 )}
                 {canEditLessonPlans && !plan.assigned && (
                   <button 
                     onClick={() => handleAssign(plan.id)}
-                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl flex items-center justify-center transition-colors"
+                    className="w-8 h-8 shrink-0 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg flex items-center justify-center transition-colors"
                     title="إضافة لخطط الدروس بتاعة المادة"
                   >
-                    <CheckCircle2 size={16} />
+                    <CheckCircle2 size={14} />
                   </button>
                 )}
                 {canEditLessonPlans && (
                   <button 
                     onClick={() => handleDelete(plan.id)}
-                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center transition-colors"
+                    className="w-8 h-8 shrink-0 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg flex items-center justify-center transition-colors"
                     title="حذف"
                   >
-                    <Trash2 size={16} />
+                    <Trash2 size={14} />
                   </button>
                 )}
               </div>

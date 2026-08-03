@@ -1099,6 +1099,15 @@ export async function getCurriculumSubjects(grade: string): Promise<string[]> {
 // ================== المنهج الدراسي (Curriculum) ==================
 
 // بيجيب كل مواد صف معيّن مع تفاصيلها
+export async function getAllDistinctSubjects(): Promise<string[]> {
+  const { data, error } = await supabase.from('curriculum_subjects').select('subject');
+  if (error) {
+    console.error('Error fetching distinct subjects:', error);
+    return [];
+  }
+  return Array.from(new Set((data || []).map((row: any) => row.subject))).sort();
+}
+
 export async function getCurriculumSubjectsDetailed(grade: string): Promise<{ subject: string; code: string; nameEn: string; department: string }[]> {
   const { data, error } = await supabase.from('curriculum_subjects').select('subject, code, name_en, department').eq('grade', grade);
   if (error) {
