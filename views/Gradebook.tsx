@@ -827,7 +827,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   onClick={() => {
                      if (selectedClassId) updateGradebookConfigStatus(selectedClassId, 'draft').then(() => refreshConfigs());
                      setGradebooksData(gradebooksData.map(g => g.id === selectedClassId ? { ...g, status: 'draft' } : g));
-                     setActiveTab('approvals');
+                     setActiveTab('admin');
                      setSelectedClassId(null);
                   }}
                >
@@ -865,6 +865,28 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                )}
              </div>
            )}
+
+           {!selectedClassId && (() => {
+             const draftConfigs = gradebooksData.filter((g: any) => g.status === 'draft');
+             if (draftConfigs.length === 0) return null;
+             return (
+               <div className="max-w-4xl mx-auto mb-8 bg-amber-50 border border-amber-200 rounded-2xl p-5">
+                 <p className="text-sm font-bold text-amber-800 mb-3">قوالب مسودة محتاجة تعديل ({draftConfigs.length})</p>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                   {draftConfigs.map((g: any) => (
+                     <button
+                       key={g.id}
+                       onClick={() => { setSelectedClassId(g.id); setAdminStep(1); }}
+                       className="text-right bg-white border border-amber-200 hover:border-amber-400 rounded-xl p-3 transition-colors"
+                     >
+                       <p className="font-bold text-gray-900 text-sm">{g.name}</p>
+                       <p className="text-xs text-gray-500">{g.grades}</p>
+                     </button>
+                   ))}
+                 </div>
+               </div>
+             );
+           })()}
 
            {adminStep === 1 && (() => {
              const selectedTemplateName = templates.find(t => t.id === activeTemplate)?.name || 'مخصص (بدون قالب)';
