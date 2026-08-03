@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
-import { getCurriculumSubjectsDetailed, createCurriculumLessonPlan } from '../services/supabaseData';
+import { getCurriculumSubjectsDetailed, createCurriculumLessonPlan, updateCurriculumLessonPlan, getCurriculumLessonPlanById } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { 
   Sparkles, 
@@ -23,6 +23,7 @@ import {
   AlignLeft,
   Plus,
   BookOpen,
+  ArrowLeft as ArrowLeftIcon,
   Lock,
   Calculator,
   ChevronDown
@@ -31,6 +32,8 @@ import {
 interface LessonPlannerProps {
   language: Language;
   permissions?: string[];
+  editContext?: { mode: 'edit' | 'view'; planId: string } | null;
+  onExitContext?: () => void;
 }
 
 const AI_BLOCKS = [
@@ -101,8 +104,12 @@ const StandardsDropdown = () => {
   );
 };
 
-export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissions = [] }) => {
+export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissions = [], editContext = null, onExitContext }) => {
   const canEditLessonPlans = permissions.length === 0 || permissions.includes('curriculum_lesson_plans');
+  const isReadOnly = editContext?.mode === 'view';
+  const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(false);
+  const pendingSubjectRef = React.useRef<string | null>(null);
   const GRADE_LEVELS_LP = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
   const [grade, setGrade] = useState(GRADE_LEVELS_LP[0]);
   const [subject, setSubject] = useState('');
@@ -123,9 +130,35 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
     getCurriculumSubjectsDetailed(grade).then((subs) => {
       const names = subs.map(s => s.subject);
       setAvailableSubjects(names);
-      if (names.length > 0 && !names.includes(subject)) setSubject(names[0]);
+      if (pendingSubjectRef.current && names.includes(pendingSubjectRef.current)) {
+        setSubject(pendingSubjectRef.current);
+        pendingSubjectRef.current = null;
+      } else if (names.length > 0 && !names.includes(subject)) {
+        setSubject(names[0]);
+      }
     });
   }, [grade]);
+
+  useEffect(() => {
+    if (!editContext?.planId) return;
+    setIsLoadingPlan(true);
+    getCurriculumLessonPlanById(editContext.planId).then((plan) => {
+      setIsLoadingPlan(false);
+      if (!plan) {
+        showToast('حصل خطأ أثناء تحميل الخطة.', 'error');
+        return;
+      }
+      let parsed: any = { blocks: [], topic: '' };
+      try { parsed = JSON.parse(plan.content); } catch {}
+      pendingSubjectRef.current = plan.subject;
+      setGrade(plan.grade);
+      setTopic(parsed.topic || '');
+      setAiBlocks(parsed.blocks || []);
+      setActiveTab('ai');
+      setEditingPlanId(plan.id);
+      setHasGenerated(true);
+    });
+  }, [editContext?.planId]);
 
   const handleGeneratePlan = async () => {
     if (!topic.trim() || !subject) {
@@ -171,17 +204,25 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
       return;
     }
     setIsSaving(true);
-    const id = await createCurriculumLessonPlan({
-      grade,
-      subject,
-      title: topic ? `خطة درس: ${topic}` : 'خطة درس بدون عنوان',
-      content: JSON.stringify({ blocks: blocksToSave, topic }),
-    });
-    setIsSaving(false);
-    if (id) {
-      showToast('تم حفظ الخطة في المكتبة بنجاح.', 'success');
+    const title = topic ? `خطة درس: ${topic}` : 'خطة درس بدون عنوان';
+    const content = JSON.stringify({ blocks: blocksToSave, topic });
+    if (editingPlanId) {
+      const ok = await updateCurriculumLessonPlan(editingPlanId, { title, content });
+      setIsSaving(false);
+      if (ok) {
+        showToast('تم تحديث الخطة بنجاح.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء الحفظ.', 'error');
+      }
     } else {
-      showToast('حصل خطأ أثناء الحفظ.', 'error');
+      const id = await createCurriculumLessonPlan({ grade, subject, title, content });
+      setIsSaving(false);
+      if (id) {
+        setEditingPlanId(id);
+        showToast('تم حفظ الخطة في المكتبة بنجاح.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء الحفظ.', 'error');
+      }
     }
   };
 
@@ -246,9 +287,13 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
 
   return (
     <div className="max-w-[1400px] mx-auto pb-6 h-[calc(100vh-100px)]" dir="rtl">
+      {isLoadingPlan ? (
+        <div className="flex items-center justify-center h-full text-gray-400">جاري تحميل الخطة...</div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-full">
         
         {/* Column 1: Control Panel (Right Side in RTL) lg:col-span-4 */}
+        {!isReadOnly && (
         <div className="lg:col-span-4 flex flex-col bg-white rounded-3xl border border-gray-100 shadow-none overflow-hidden h-full">
           
           {/* Tabs */}
@@ -400,9 +445,15 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
             </div>
           )}
         </div>
+        )}
 
         {/* Column 2: Live Document Preview & Library Action (Left Side in RTL) lg:col-span-8 */}
-        <div className="lg:col-span-8 bg-white rounded-3xl border border-gray-100 shadow-none p-8 h-full flex flex-col relative overflow-hidden">
+        <div className={`${isReadOnly ? 'lg:col-span-12' : 'lg:col-span-8'} bg-white rounded-3xl border border-gray-100 shadow-none p-8 h-full flex flex-col relative overflow-hidden`}>
+          {isReadOnly && (
+            <button onClick={onExitContext} className="flex items-center gap-2 text-sm font-bold text-violet-600 hover:underline mb-4 self-start">
+              <ArrowLeftIcon size={16} /> رجوع للمكتبة
+            </button>
+          )}
           
           {/* Header Action Row */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 pb-4 border-b border-gray-100 shrink-0">
@@ -410,7 +461,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
               <div className="flex items-center gap-2 mb-2">
                 <FileText className="text-purple-500 shrink-0" size={24} />
                 <h2 
-                  contentEditable 
+                  contentEditable={!isReadOnly} 
                   suppressContentEditableWarning 
                   className="text-2xl font-bold text-gray-900 outline-none focus:bg-gray-50 hover:bg-gray-50 rounded-lg p-1 min-w-[200px] transition-colors"
                 >
@@ -419,7 +470,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
               </div>
               <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
                 <span 
-                  contentEditable 
+                  contentEditable={!isReadOnly} 
                   suppressContentEditableWarning
                   className="bg-purple-50 text-purple-700 px-2.5 py-0.5 rounded border border-purple-100 outline-none focus:ring-1 focus:ring-purple-400"
                 >
@@ -427,7 +478,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                 </span>
                 <span className="opacity-50">•</span>
                 <span 
-                  contentEditable 
+                  contentEditable={!isReadOnly} 
                   suppressContentEditableWarning
                   className="outline-none focus:bg-gray-100 px-1 rounded"
                 >
@@ -435,7 +486,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                 </span>
                 <span className="opacity-50">•</span>
                 <span
-                   contentEditable 
+                   contentEditable={!isReadOnly} 
                    suppressContentEditableWarning
                    className="outline-none focus:bg-gray-100 px-1 rounded"
                 >
@@ -444,6 +495,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
               </div>
             </div>
             
+            {!isReadOnly && (
             <div className="flex items-center gap-2">
               <button className="p-2.5 text-gray-500 hover:bg-gray-50 hover:text-gray-900 rounded-lg transition-colors focus:outline-none">
                 <Download size={20} />
@@ -454,10 +506,11 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
               {canEditLessonPlans && (
               <button onClick={handleSaveToLibrary} disabled={isSaving} className="bg-purple-600 text-white flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold hover:bg-purple-700 transition-all focus:outline-none shadow-none border border-purple-600 disabled:opacity-60">
                 <Save size={18} />
-                {isSaving ? 'جاري الحفظ...' : 'حفظ في المكتبة'}
+                {isSaving ? 'جاري الحفظ...' : editingPlanId ? 'حفظ التعديلات' : 'حفظ في المكتبة'}
               </button>
               )}
             </div>
+            )}
           </div>
 
           {/* Formatting Toolbar - Always Visible */}
@@ -487,7 +540,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
               currentBlocks.map((block) => (
                 <div key={block.id} className="mb-8 group">
                   <h3 
-                    contentEditable 
+                    contentEditable={!isReadOnly} 
                     suppressContentEditableWarning
                     className="text-lg font-bold text-purple-900 flex items-center gap-2 mb-4 outline-none focus:bg-purple-50 rounded-lg p-1 -ml-1 transition-colors"
                   >
@@ -500,7 +553,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                        {block.items.map((item: any, idx: number) => (
                          <div key={idx} className="flex gap-4 p-4 rounded-xl border border-transparent hover:border-gray-100 hover:bg-gray-50 transition-colors group/item shadow-none">
                            <div 
-                             contentEditable 
+                             contentEditable={!isReadOnly} 
                              suppressContentEditableWarning 
                              className="w-16 h-8 shrink-0 flex items-center justify-center bg-white rounded-lg border border-gray-200 text-xs font-bold text-gray-500 shadow-none outline-none focus:ring-1 focus:ring-purple-400 focus:border-purple-400"
                            >
@@ -508,14 +561,14 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                            </div>
                            <div className="flex-1">
                               <h4 
-                                contentEditable 
+                                contentEditable={!isReadOnly} 
                                 suppressContentEditableWarning 
                                 className="font-bold text-gray-900 text-[15px] outline-none hover:bg-gray-100 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded p-1 -ml-1 transition-all"
                               >
                                 {item.title}
                               </h4>
                               <p 
-                                contentEditable 
+                                contentEditable={!isReadOnly} 
                                 suppressContentEditableWarning 
                                 className="text-[14px] text-gray-600 mt-1.5 leading-relaxed outline-none hover:bg-gray-100 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded p-1 -ml-1 transition-all"
                               >
@@ -539,7 +592,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
                     </div>
                   ) : (
                     <div 
-                      contentEditable 
+                      contentEditable={!isReadOnly} 
                       suppressContentEditableWarning 
                       className="pr-4 text-gray-700 outline-none hover:bg-gray-50 focus:bg-white focus:ring-1 focus:ring-purple-400 rounded-xl p-3 transition-all min-h-[3rem] shadow-none"
                       dangerouslySetInnerHTML={{ __html: block.rawHtml }} 
@@ -553,6 +606,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
         </div>
 
       </div>
+      )}
     </div>
   );
 };

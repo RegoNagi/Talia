@@ -1280,6 +1280,7 @@ export async function getCurriculumLessonPlans(grade: string, subject: string): 
     .select('id, title, content, week_number')
     .eq('grade', grade)
     .eq('subject', subject)
+    .eq('assigned_to_subject', true)
     .order('created_at', { ascending: false });
   if (error) {
     console.error('Error fetching lesson plans:', error);
@@ -1288,22 +1289,31 @@ export async function getCurriculumLessonPlans(grade: string, subject: string): 
   return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', weekNumber: row.week_number }));
 }
 
-export async function getAllCurriculumLessonPlans(): Promise<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string }[]> {
+export async function getAllCurriculumLessonPlans(): Promise<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string; assigned: boolean }[]> {
   const { data, error } = await supabase
     .from('curriculum_lesson_plans')
-    .select('id, title, content, grade, subject, created_at')
+    .select('id, title, content, grade, subject, created_at, assigned_to_subject')
     .order('created_at', { ascending: false });
   if (error) {
     console.error('Error fetching all lesson plans:', error);
     return [];
   }
-  return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', grade: row.grade, subject: row.subject, createdAt: row.created_at }));
+  return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', grade: row.grade, subject: row.subject, createdAt: row.created_at, assigned: !!row.assigned_to_subject }));
 }
 
-export async function createCurriculumLessonPlan(input: { grade: string; subject: string; title: string; content: string; weekNumber?: number | null }): Promise<string | null> {
+export async function getCurriculumLessonPlanById(planId: string): Promise<{ id: string; title: string; content: string; grade: string; subject: string } | null> {
+  const { data, error } = await supabase.from('curriculum_lesson_plans').select('id, title, content, grade, subject').eq('id', planId).maybeSingle();
+  if (error || !data) {
+    console.error('Error fetching lesson plan:', error);
+    return null;
+  }
+  return data;
+}
+
+export async function createCurriculumLessonPlan(input: { grade: string; subject: string; title: string; content: string; weekNumber?: number | null; assigned?: boolean }): Promise<string | null> {
   const { data, error } = await supabase
     .from('curriculum_lesson_plans')
-    .insert({ grade: input.grade, subject: input.subject, title: input.title, content: input.content, week_number: input.weekNumber ?? null })
+    .insert({ grade: input.grade, subject: input.subject, title: input.title, content: input.content, week_number: input.weekNumber ?? null, assigned_to_subject: input.assigned ?? false })
     .select('id')
     .single();
   if (error || !data) {
@@ -1311,6 +1321,24 @@ export async function createCurriculumLessonPlan(input: { grade: string; subject
     return null;
   }
   return data.id;
+}
+
+export async function updateCurriculumLessonPlan(planId: string, input: { title: string; content: string }): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_lesson_plans').update({ title: input.title, content: input.content }).eq('id', planId);
+  if (error) {
+    console.error('Error updating lesson plan:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function assignLessonPlanToSubject(planId: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_lesson_plans').update({ assigned_to_subject: true }).eq('id', planId);
+  if (error) {
+    console.error('Error assigning lesson plan to subject:', error);
+    return false;
+  }
+  return true;
 }
 
 export async function deleteCurriculumLessonPlan(planId: string): Promise<boolean> {

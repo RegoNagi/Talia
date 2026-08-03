@@ -401,6 +401,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
         subject: selectedSubject,
         title: plan.topic || topic,
         content: JSON.stringify(plan),
+        assigned: true,
       });
       if (id) {
         getCurriculumLessonPlans(selectedGrade, selectedSubject).then(setLessonPlans);

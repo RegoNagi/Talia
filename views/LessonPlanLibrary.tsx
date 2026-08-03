@@ -1,33 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
-import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan } from '../services/supabaseData';
+import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan, assignLessonPlanToSubject } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { 
   Search, 
   BookOpen, 
-  Clock, 
   Eye, 
-  X,
-  Target,
-  List,
+  Pencil,
+  Trash2,
   CheckCircle2,
-  FileText,
-  Trash2
+  Layers,
+  Calendar,
 } from 'lucide-react';
 
 interface LessonPlanLibraryProps {
   language: Language;
   permissions?: string[];
+  onOpenPlan: (planId: string, mode: 'edit' | 'view') => void;
 }
 
-export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, permissions = [] }) => {
+export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, permissions = [], onOpenPlan }) => {
   const canEditLessonPlans = permissions.length === 0 || permissions.includes('curriculum_lesson_plans');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGrade, setSelectedGrade] = useState('');
   const [selectedSubject, setSelectedSubject] = useState('');
-  const [previewPlan, setPreviewPlan] = useState<any | null>(null);
-  const [plans, setPlans] = useState<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string }[]>([]);
+  const [plans, setPlans] = useState<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string; assigned: boolean }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const isRTL = language === Language.AR;
@@ -65,6 +63,16 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
     }
   };
 
+  const handleAssign = async (planId: string) => {
+    const ok = await assignLessonPlanToSubject(planId);
+    if (ok) {
+      refreshPlans();
+      showToast('تمت إضافة الخطة لتاب "خطط الدروس" بتاع المادة.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الإضافة.', 'error');
+    }
+  };
+
   const parseContent = (content: string): { blocks: any[]; topic: string } => {
     try {
       const parsed = JSON.parse(content);
@@ -74,14 +82,10 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
     }
   };
 
-  const renderBlockIcon = (type: string) => {
-    switch (type) {
-      case 'objectives': return <Target size={18} className="text-violet-600" />;
-      case 'materials': return <List size={18} className="text-violet-600" />;
-      case 'timeline': return <Clock size={18} className="text-violet-600" />;
-      case 'assessment': return <CheckCircle2 size={18} className="text-violet-600" />;
-      default: return <FileText size={18} className="text-violet-600" />;
-    }
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const d = new Date(dateString);
+    return d.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
   };
 
   return (
@@ -135,127 +139,76 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredPlans.map((plan) => {
-          const { topic } = parseContent(plan.content);
+          const { blocks, topic } = parseContent(plan.content);
           return (
-            <div key={plan.id} className="bg-white rounded-3xl p-6 border border-gray-100 hover:border-purple-200 transition-all duration-300 flex flex-col h-[240px] group cursor-pointer shadow-none">
-              <div className="flex justify-between items-start mb-4">
-                <span className="bg-purple-50 text-purple-700 px-3 py-1 rounded-full text-xs font-bold border border-purple-100">
-                  {plan.subject} - {plan.grade}
-                </span>
-                <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center text-gray-400 group-hover:text-purple-500 transition-colors">
-                  <BookOpen size={16} />
+            <div key={plan.id} className="bg-white rounded-3xl border border-gray-100 hover:border-violet-200 hover:shadow-lg transition-all duration-300 flex flex-col overflow-hidden group shadow-sm">
+              <div className="p-6 flex-1">
+                <div className="flex justify-between items-start mb-4">
+                  <span className="bg-violet-50 text-violet-700 px-3 py-1 rounded-full text-xs font-bold border border-violet-100">
+                    {plan.subject} · {plan.grade}
+                  </span>
+                  <div className="w-9 h-9 rounded-xl bg-violet-50 flex items-center justify-center text-violet-500 group-hover:bg-violet-100 transition-colors shrink-0">
+                    <BookOpen size={16} />
+                  </div>
                 </div>
+
+                <h3 className="text-lg font-extrabold text-gray-900 mb-1 line-clamp-1">{plan.title}</h3>
+                {topic && (
+                  <p className="text-sm text-gray-500 font-medium mb-3 line-clamp-1">الموضوع: {topic}</p>
+                )}
+
+                <div className="flex items-center gap-3 text-xs font-bold text-gray-400 mt-3">
+                  <span className="flex items-center gap-1.5"><Layers size={13} /> {blocks.length} عناصر</span>
+                  {plan.createdAt && <span className="flex items-center gap-1.5"><Calendar size={13} /> {formatDate(plan.createdAt)}</span>}
+                </div>
+
+                {plan.assigned && (
+                  <span className="inline-flex items-center gap-1 mt-3 text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-1 rounded-full">
+                    <CheckCircle2 size={12} /> مضافة لخطط الدروس بتاعة المادة
+                  </span>
+                )}
               </div>
-              
-              <h3 className="text-xl font-extrabold text-gray-800 mb-2 line-clamp-1 group-hover:text-purple-700 transition-colors">{plan.title}</h3>
-              {topic && (
-                <p className="text-sm text-gray-500 font-medium mb-4 line-clamp-2 leading-relaxed">
-                  الموضوع: {topic}
-                </p>
-              )}
-              
-              {/* Card Footer Actions */}
-              <div className="mt-auto flex gap-3 pt-4 border-t border-gray-50">
+
+              <div className="flex gap-2 p-4 pt-0">
                 <button 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setPreviewPlan(plan);
-                  }}
-                  className="bg-gray-50 text-gray-700 hover:bg-gray-100 flex-1 rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm font-bold transition-colors shadow-none border border-transparent"
+                  onClick={() => onOpenPlan(plan.id, 'view')}
+                  className="flex-1 bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-xl py-2.5 flex items-center justify-center gap-2 text-sm font-bold transition-colors"
                 >
                   <Eye size={16} />
                   معاينة
                 </button>
                 {canEditLessonPlans && (
-                <button 
-                  onClick={(e) => { e.stopPropagation(); handleDelete(plan.id); }}
-                  className="bg-red-50 text-red-600 hover:bg-red-100 rounded-xl py-2.5 px-4 flex items-center justify-center gap-2 text-sm font-bold shadow-none border border-transparent transition-all"
-                >
-                  <Trash2 size={16} />
-                </button>
+                  <button 
+                    onClick={() => onOpenPlan(plan.id, 'edit')}
+                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-violet-50 hover:text-violet-600 rounded-xl flex items-center justify-center transition-colors"
+                    title="تعديل"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                )}
+                {canEditLessonPlans && !plan.assigned && (
+                  <button 
+                    onClick={() => handleAssign(plan.id)}
+                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl flex items-center justify-center transition-colors"
+                    title="إضافة لخطط الدروس بتاعة المادة"
+                  >
+                    <CheckCircle2 size={16} />
+                  </button>
+                )}
+                {canEditLessonPlans && (
+                  <button 
+                    onClick={() => handleDelete(plan.id)}
+                    className="w-11 shrink-0 bg-gray-50 text-gray-700 hover:bg-red-50 hover:text-red-600 rounded-xl flex items-center justify-center transition-colors"
+                    title="حذف"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 )}
               </div>
             </div>
           );
         })}
       </div>
-
-      {/* PREVIEW MODAL */}
-      {previewPlan && (() => {
-        const { blocks, topic } = parseContent(previewPlan.content);
-        return (
-          <div className="fixed inset-0 z-50 flex items-end justify-end bg-slate-900/40 backdrop-blur-sm sm:items-center p-4">
-            <div 
-              className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in slide-in-from-bottom sm:slide-in-from-right duration-300"
-              dir="rtl"
-            >
-              <div className="flex items-center justify-between p-6 border-b border-slate-100 bg-white z-10 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-violet-100 text-violet-600 flex items-center justify-center">
-                    <FileText size={20} />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-800">{previewPlan.title}</h2>
-                    <div className="text-sm font-medium text-slate-500 mt-1 flex items-center gap-2">
-                      <span className="text-violet-600">{previewPlan.subject}</span>
-                      <span className="opacity-50">•</span>
-                      <span>{previewPlan.grade}</span>
-                      {topic && <><span className="opacity-50">•</span><span>{topic}</span></>}
-                    </div>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setPreviewPlan(null)}
-                  className="w-10 h-10 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center transition-colors focus:outline-none"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 text-slate-700 font-medium">
-                {blocks.length === 0 && (
-                  <p className="text-center text-gray-400 py-10">مفيش محتوى محفوظ لهذه الخطة.</p>
-                )}
-                {blocks.map((block: any) => (
-                  <div key={block.id} className="mb-8">
-                    <h3 className="text-lg font-bold text-violet-900 flex items-center gap-2 mb-4 bg-violet-50/50 p-2.5 rounded-lg border-r-4 border-violet-500">
-                      {renderBlockIcon(block.type)}
-                      {block.title}
-                    </h3>
-                    {block.type === 'timeline' ? (
-                      <div className="space-y-4 pr-2">
-                        {(block.items || []).map((item: any, idx: number) => (
-                          <div key={idx} className="flex gap-4 p-4 rounded-2xl border border-slate-100 bg-slate-50/50">
-                            <div className="w-20 h-8 shrink-0 flex items-center justify-center bg-white rounded-lg border border-slate-200 text-xs font-bold text-slate-500 shadow-sm">
-                              {item.time}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-slate-900 text-[15px]">{item.title}</h4>
-                              <p className="text-[14px] text-slate-600 mt-1.5 leading-relaxed">{item.desc}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="pr-4 text-slate-700" dangerouslySetInnerHTML={{ __html: block.rawHtml || '' }} />
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="p-6 border-t border-slate-100 bg-slate-50 shrink-0">
-                <button 
-                  onClick={() => setPreviewPlan(null)}
-                  className="w-full bg-violet-600 text-white font-bold text-base rounded-2xl py-4 shadow-sm hover:shadow-md hover:bg-violet-700 transition-all flex items-center justify-center gap-2 focus:outline-none focus:ring-4 focus:ring-violet-200"
-                >
-                  إغلاق
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
     </div>
   );
 };
