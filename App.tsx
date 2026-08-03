@@ -320,9 +320,9 @@ const App: React.FC = () => {
       case 'attendance':
         return <Attendance role={user.role} language={language} user={user} permissions={userPermissions} />;
       case 'lessons-planner':
-        return <LessonPlanner language={language} />;
+        return <LessonPlanner language={language} permissions={userPermissions} />;
       case 'lessons-library':
-        return <LessonPlanLibrary language={language} />;
+        return <LessonPlanLibrary language={language} permissions={userPermissions} />;
       case 'users':
       case 'users-admin':
       case 'users-teachers':

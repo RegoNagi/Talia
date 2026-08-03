@@ -1,5 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
+import { generateLessonPlan } from '../services/geminiService';
+import { getCurriculumSubjectsDetailed, createCurriculumLessonPlan } from '../services/supabaseData';
+import { showToast } from '../components/Toast';
 import { 
   Sparkles, 
   Send,
@@ -27,6 +30,7 @@ import {
 
 interface LessonPlannerProps {
   language: Language;
+  permissions?: string[];
 }
 
 const AI_BLOCKS = [
@@ -97,20 +101,92 @@ const StandardsDropdown = () => {
   );
 };
 
-export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language }) => {
-  const [grade, setGrade] = useState('الصف الخامس');
-  const [subject, setSubject] = useState('العلوم');
-  const [topic, setTopic] = useState('الجاذبية الأرضية');
+export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissions = [] }) => {
+  const canEditLessonPlans = permissions.length === 0 || permissions.includes('curriculum_lesson_plans');
+  const GRADE_LEVELS_LP = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+  const [grade, setGrade] = useState(GRADE_LEVELS_LP[0]);
+  const [subject, setSubject] = useState('');
+  const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
+  const [topic, setTopic] = useState('');
   const [chatInput, setChatInput] = useState('');
   const [activeTab, setActiveTab] = useState<'ai' | 'manual'>('ai');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
 
-  const [aiBlocks, setAiBlocks] = useState<any[]>(AI_BLOCKS);
+  const [aiBlocks, setAiBlocks] = useState<any[]>([]);
   const [manualBlocks, setManualBlocks] = useState<any[]>([]);
 
-  const isRTL = language === Language.AR; 
+  const isRTL = language === Language.AR;
 
-  const grades = ['الصف الأول', 'الصف الثاني', 'الصف الثالث', 'الصف الرابع', 'الصف الخامس', 'الصف السادس', 'الصف السابع', 'الصف الثامن', 'الصف التاسع', 'الصف العاشر', 'الصف الحادي عشر', 'الصف الثاني عشر'];
-  const subjects = ['العلوم', 'الرياضيات', 'التاريخ', 'اللغة العربية', 'اللغة الإنجليزية'];
+  useEffect(() => {
+    getCurriculumSubjectsDetailed(grade).then((subs) => {
+      const names = subs.map(s => s.subject);
+      setAvailableSubjects(names);
+      if (names.length > 0 && !names.includes(subject)) setSubject(names[0]);
+    });
+  }, [grade]);
+
+  const handleGeneratePlan = async () => {
+    if (!topic.trim() || !subject) {
+      showToast('اكتب موضوع الدرس واختار المادة الأول.', 'error');
+      return;
+    }
+    setIsGenerating(true);
+    const plan = await generateLessonPlan(topic, grade, subject, isRTL ? 'ar' : 'en');
+    setIsGenerating(false);
+    if (!plan) {
+      showToast('حصل خطأ أثناء توليد الخطة.', 'error');
+      return;
+    }
+    const blocks: any[] = [];
+    if (plan.objectives?.length) {
+      blocks.push({ id: 'objectives', type: 'objectives', title: 'الأهداف التعليمية', rawHtml: `<ul class="list-disc list-inside space-y-2">${plan.objectives.map(o => `<li>${o}</li>`).join('')}</ul>` });
+    }
+    if (plan.materials?.length) {
+      blocks.push({ id: 'materials', type: 'materials', title: 'المواد والأدوات اللازمة', rawHtml: `<ul class="list-disc list-inside space-y-2">${plan.materials.map(m => `<li>${m}</li>`).join('')}</ul>` });
+    }
+    if (plan.outline?.length) {
+      blocks.push({ id: 'timeline', type: 'timeline', title: 'المسار الزمني للدرس', items: plan.outline.map(o => ({ time: o.duration, title: o.activity, desc: o.description })) });
+    }
+    if (plan.quiz?.length) {
+      blocks.push({
+        id: 'assessment', type: 'assessment', title: 'التقييم المستمر',
+        rawHtml: `<ul class="list-disc list-inside space-y-2">${plan.quiz.map(q => `<li>${q.question}</li>`).join('')}</ul>`,
+      });
+    }
+    setAiBlocks(blocks);
+    setHasGenerated(true);
+    showToast('تم توليد خطة الدرس بنجاح.', 'success');
+  };
+
+  const handleSaveToLibrary = async () => {
+    const blocksToSave = activeTab === 'ai' ? aiBlocks : manualBlocks;
+    if (blocksToSave.length === 0) {
+      showToast('لسه معملتش أي محتوى للخطة عشان تحفظه.', 'error');
+      return;
+    }
+    if (!subject) {
+      showToast('اختار المادة الأول.', 'error');
+      return;
+    }
+    setIsSaving(true);
+    const id = await createCurriculumLessonPlan({
+      grade,
+      subject,
+      title: topic ? `خطة درس: ${topic}` : 'خطة درس بدون عنوان',
+      content: JSON.stringify({ blocks: blocksToSave, topic }),
+    });
+    setIsSaving(false);
+    if (id) {
+      showToast('تم حفظ الخطة في المكتبة بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحفظ.', 'error');
+    }
+  };
+
+  const grades = GRADE_LEVELS_LP;
+  const subjects = availableSubjects;
 
   const getEmptyBlock = (type: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -224,9 +300,9 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language }) => {
                 />
               </div>
               {activeTab === 'ai' && (
-                <button className="w-full mt-2 bg-purple-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-none border border-purple-600 text-sm">
+                <button onClick={handleGeneratePlan} disabled={isGenerating} className="w-full mt-2 bg-purple-600 text-white font-bold py-3 rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-none border border-purple-600 text-sm disabled:opacity-60">
                   <Sparkles size={18} />
-                  ✨ توليد الخطة آلياً
+                  {isGenerating ? 'جاري التوليد...' : '✨ توليد الخطة آلياً'}
                 </button>
               )}
             </div>
@@ -375,10 +451,12 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language }) => {
               <button className="border border-purple-200 text-purple-700 bg-white hover:bg-purple-50 flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-all focus:outline-none shadow-none">
                 نشر لعدة فصول
               </button>
-              <button className="bg-purple-600 text-white flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold hover:bg-purple-700 transition-all focus:outline-none shadow-none border border-purple-600">
+              {canEditLessonPlans && (
+              <button onClick={handleSaveToLibrary} disabled={isSaving} className="bg-purple-600 text-white flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold hover:bg-purple-700 transition-all focus:outline-none shadow-none border border-purple-600 disabled:opacity-60">
                 <Save size={18} />
-                حفظ في المكتبة
+                {isSaving ? 'جاري الحفظ...' : 'حفظ في المكتبة'}
               </button>
+              )}
             </div>
           </div>
 

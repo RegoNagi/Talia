@@ -1288,6 +1288,18 @@ export async function getCurriculumLessonPlans(grade: string, subject: string): 
   return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', weekNumber: row.week_number }));
 }
 
+export async function getAllCurriculumLessonPlans(): Promise<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string }[]> {
+  const { data, error } = await supabase
+    .from('curriculum_lesson_plans')
+    .select('id, title, content, grade, subject, created_at')
+    .order('created_at', { ascending: false });
+  if (error) {
+    console.error('Error fetching all lesson plans:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({ id: row.id, title: row.title, content: row.content || '', grade: row.grade, subject: row.subject, createdAt: row.created_at }));
+}
+
 export async function createCurriculumLessonPlan(input: { grade: string; subject: string; title: string; content: string; weekNumber?: number | null }): Promise<string | null> {
   const { data, error } = await supabase
     .from('curriculum_lesson_plans')
