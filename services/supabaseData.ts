@@ -1340,3 +1340,22 @@ export async function saveAcademicYearSettings(system: string, startDate: string
 export async function saveEducationSystem(system: string): Promise<boolean> {
   return saveAcademicYearSettings(system, '', '', '');
 }
+
+// نواتج التعلم لمادة معيّنة في صف معيّن
+export async function getLearningOutcomes(grade: string, subject: string): Promise<{ id: string; outcome: string }[]> {
+  const { data, error } = await supabase.from('curriculum_learning_outcomes').select('id, outcome').eq('grade', grade).eq('subject', subject).order('created_at', { ascending: true });
+  if (error) {
+    console.error('Error fetching learning outcomes:', error);
+    return [];
+  }
+  return data || [];
+}
+
+export async function addLearningOutcome(grade: string, subject: string, outcome: string): Promise<string | null> {
+  const { data, error } = await supabase.from('curriculum_learning_outcomes').insert({ grade, subject, outcome }).select('id').single();
+  if (error || !data) {
+    console.error('Error adding learning outcome:', error);
+    return null;
+  }
+  return data.id;
+}

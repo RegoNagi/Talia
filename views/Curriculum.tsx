@@ -11,6 +11,7 @@ import {
   getCurriculumLessonPlans, createCurriculumLessonPlan, deleteCurriculumLessonPlan,
   getCurriculumFolders, createCurriculumFolder, renameCurriculumFolder, deleteCurriculumFolder,
   getAcademicYearSettings, saveAcademicYearSettings, saveEducationSystem,
+  getLearningOutcomes, addLearningOutcome,
 } from '../services/supabaseData';
 import {
   Folder,
@@ -105,7 +106,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [loadingSubjects, setLoadingSubjects] = useState(true);
   const [subjectSearchQuery, setSubjectSearchQuery] = useState('');
 
-  const [weeks, setWeeks] = useState<{ id: string; weekNumber: number; startDate: string; endDate: string; topics: string[] }[]>([]);
+  const [weeks, setWeeks] = useState<{ id: string; weekNumber: number; startDate: string; endDate: string; topics: any[] }[]>([]);
   const [resources, setResources] = useState<{ id: string; title: string; type: string; url: string; folderId: string | null }[]>([]);
   const [lessonPlans, setLessonPlans] = useState<{ id: string; title: string; content: string; weekNumber: number | null }[]>([]);
   const [loadingSubjectData, setLoadingSubjectData] = useState(false);
@@ -122,6 +123,11 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [addingTaskWeek, setAddingTaskWeek] = useState<number | null>(null);
   const [newTaskText, setNewTaskText] = useState('');
+  const [newTaskOutcome, setNewTaskOutcome] = useState('');
+  const [newTaskResourceId, setNewTaskResourceId] = useState('');
+  const [isAddingOutcome, setIsAddingOutcome] = useState(false);
+  const [newOutcomeText, setNewOutcomeText] = useState('');
+  const [learningOutcomes, setLearningOutcomes] = useState<{ id: string; outcome: string }[]>([]);
   const [isAddingLink, setIsAddingLink] = useState(false);
   const [editingResourceId, setEditingResourceId] = useState<string | null>(null);
   const [linkForm, setLinkForm] = useState({ title: '', type: 'Link', url: '' });
@@ -180,14 +186,36 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     if (!newTaskText.trim() || !selectedGrade || !selectedSubject) return;
     const existing = weeks.find(w => w.weekNumber === weekNumber);
     const { startDate, endDate } = computeWeekDates(weekNumber);
-    const topics = [...(existing?.topics || []), newTaskText.trim()];
+    const linkedResource = resources.find(r => r.id === newTaskResourceId);
+    const newTopic = {
+      text: newTaskText.trim(),
+      outcome: newTaskOutcome || null,
+      resourceId: newTaskResourceId || null,
+      resourceTitle: linkedResource?.title || null,
+    };
+    const topics = [...(existing?.topics || []), newTopic];
     const ok = await saveCurriculumWeek({ grade: selectedGrade, subject: selectedSubject, weekNumber, startDate, endDate, topics });
     if (ok) {
       getCurriculumWeeks(selectedGrade, selectedSubject).then(setWeeks);
       setNewTaskText('');
+      setNewTaskOutcome('');
+      setNewTaskResourceId('');
       setAddingTaskWeek(null);
     } else {
       showToast('حصل خطأ أثناء حفظ المهمة.', 'error');
+    }
+  };
+
+  const handleAddOutcome = async () => {
+    if (!newOutcomeText.trim() || !selectedGrade || !selectedSubject) return;
+    const id = await addLearningOutcome(selectedGrade, selectedSubject, newOutcomeText.trim());
+    if (id) {
+      getLearningOutcomes(selectedGrade, selectedSubject).then(setLearningOutcomes);
+      setNewTaskOutcome(newOutcomeText.trim());
+      setNewOutcomeText('');
+      setIsAddingOutcome(false);
+    } else {
+      showToast('حصل خطأ أثناء إضافة ناتج التعلم.', 'error');
     }
   };
 
@@ -243,11 +271,13 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
       getCurriculumResources(selectedGrade, selectedSubject),
       getCurriculumLessonPlans(selectedGrade, selectedSubject),
       getCurriculumFolders(selectedGrade, selectedSubject),
-    ]).then(([w, r, p, f]) => {
+      getLearningOutcomes(selectedGrade, selectedSubject),
+    ]).then(([w, r, p, f, o]) => {
       setWeeks(w);
       setResources(r);
       setLessonPlans(p);
       setFolders(f);
+      setLearningOutcomes(o);
       setLoadingSubjectData(false);
     });
   }, [selectedGrade, selectedSubject]);
@@ -598,28 +628,73 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                                 </div>
                                 {week?.topics && week.topics.length > 0 && (
                                   <div className="mt-2 space-y-2 mb-3">
-                                    {week.topics.map((topic, ti) => (
-                                      <div key={ti} className="flex items-center gap-2 p-2.5 bg-gray-50 rounded-lg text-sm font-medium text-gray-700">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
-                                        {topic}
-                                      </div>
-                                    ))}
+                                    {week.topics.map((topic: any, ti: number) => {
+                                      const isObj = typeof topic === 'object' && topic !== null;
+                                      const text = isObj ? topic.text : topic;
+                                      const outcome = isObj ? topic.outcome : null;
+                                      const resourceTitle = isObj ? topic.resourceTitle : null;
+                                      return (
+                                        <div key={ti} className="p-2.5 bg-gray-50 rounded-lg text-sm font-medium text-gray-700">
+                                          <div className="flex items-center gap-2">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-purple-400"></div>
+                                            {text}
+                                          </div>
+                                          {(outcome || resourceTitle) && (
+                                            <div className="flex flex-wrap gap-2 mt-1.5 mr-3.5">
+                                              {outcome && (
+                                                <span className="text-[10px] bg-violet-50 text-violet-700 border border-violet-100 px-2 py-0.5 rounded-full font-bold">🎯 {outcome}</span>
+                                              )}
+                                              {resourceTitle && (
+                                                <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full font-bold">🔗 {resourceTitle}</span>
+                                              )}
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 )}
                                 {canEditCurriculum && (
                                   addingTaskWeek === weekNumber ? (
-                                    <div className="flex gap-2">
+                                    <div className="space-y-2 bg-gray-50/50 p-3 rounded-xl border border-violet-100">
                                       <input
                                         autoFocus
                                         type="text"
                                         value={newTaskText}
                                         onChange={(e) => setNewTaskText(e.target.value)}
-                                        onKeyDown={(e) => e.key === 'Enter' && handleAddTopicToWeek(weekNumber)}
                                         placeholder="اسم المهمة أو الموضوع..."
-                                        className="flex-1 bg-gray-50 border border-violet-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                                        className="w-full bg-white border border-violet-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-violet-500"
                                       />
-                                      <Button onClick={() => handleAddTopicToWeek(weekNumber)} className="text-xs px-4">حفظ</Button>
-                                      <button onClick={() => { setAddingTaskWeek(null); setNewTaskText(''); }} className="text-xs text-gray-400 px-2">إلغاء</button>
+                                      <div className="flex gap-2">
+                                        <select value={newTaskOutcome} onChange={(e) => e.target.value === '__add__' ? setIsAddingOutcome(true) : setNewTaskOutcome(e.target.value)} className="flex-1 bg-white border border-gray-200 rounded-xl px-2 py-2 text-xs outline-none">
+                                          <option value="">🎯 ناتج تعلم (اختياري)</option>
+                                          {learningOutcomes.map(o => <option key={o.id} value={o.outcome}>{o.outcome}</option>)}
+                                          <option value="__add__">+ إضافة ناتج جديد...</option>
+                                        </select>
+                                        <select value={newTaskResourceId} onChange={(e) => setNewTaskResourceId(e.target.value)} className="flex-1 bg-white border border-gray-200 rounded-xl px-2 py-2 text-xs outline-none">
+                                          <option value="">🔗 ربط بمورد (اختياري)</option>
+                                          {resources.map(r => <option key={r.id} value={r.id}>{r.title}</option>)}
+                                        </select>
+                                      </div>
+                                      {isAddingOutcome && (
+                                        <div className="flex gap-2">
+                                          <input
+                                            autoFocus
+                                            type="text"
+                                            value={newOutcomeText}
+                                            onChange={(e) => setNewOutcomeText(e.target.value)}
+                                            placeholder="اكتب ناتج التعلم الجديد..."
+                                            className="flex-1 bg-white border border-violet-200 rounded-xl px-3 py-1.5 text-xs outline-none"
+                                            onKeyDown={(e) => e.key === 'Enter' && handleAddOutcome()}
+                                          />
+                                          <button onClick={handleAddOutcome} className="text-xs font-bold text-violet-600">إضافة</button>
+                                          <button onClick={() => setIsAddingOutcome(false)} className="text-xs text-gray-400">إلغاء</button>
+                                        </div>
+                                      )}
+                                      <div className="flex gap-2 justify-end pt-1">
+                                        <button onClick={() => { setAddingTaskWeek(null); setNewTaskText(''); setNewTaskOutcome(''); setNewTaskResourceId(''); setIsAddingOutcome(false); }} className="text-xs text-gray-400 px-2">إلغاء</button>
+                                        <Button onClick={() => handleAddTopicToWeek(weekNumber)} className="text-xs px-4">حفظ</Button>
+                                      </div>
                                     </div>
                                   ) : (
                                     <button
@@ -640,15 +715,18 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
 
                   {!loadingSubjectData && activeSubjectTab === 'resources' && (
                     <div className="space-y-6">
-                      <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center bg-gray-50/50">
-                        <div className="w-16 h-16 bg-violet-50 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-violet-600">
-                          <UploadCloud size={32} />
+                      <div className="border-2 border-dashed border-gray-200 rounded-2xl p-4 text-center bg-gray-50/50">
+                        <div className="flex items-center justify-center gap-3 mb-3">
+                          <div className="w-9 h-9 bg-violet-50 rounded-full flex items-center justify-center shadow-sm text-violet-600 shrink-0">
+                            <UploadCloud size={18} />
+                          </div>
+                          <div className="text-right">
+                            <h3 className="font-bold text-gray-900 text-sm leading-tight">رفع الموارد</h3>
+                            <p className="text-xs text-gray-400 leading-tight">رفع الملفات مباشرة مش متاح لسه، محتاج مساحة تخزين</p>
+                          </div>
                         </div>
-                        <h3 className="font-bold text-gray-900 mb-1">رفع الموارد</h3>
-                        <p className="text-sm text-gray-500 mb-1">سحب وإفلات الملفات أو الاستيراد</p>
-                        <p className="text-xs text-gray-400 mb-6">(رفع الملفات مباشرة مش متاح لسه، محتاج مساحة تخزين — استخدم رابط بدله)</p>
                         {canEditCurriculum && (
-                          <div className="flex flex-wrap justify-center gap-3">
+                          <div className="flex flex-wrap justify-center gap-2">
                             {[
                               { label: 'رابط', type: 'Link' },
                               { label: 'وثيقة', type: 'Document' },
@@ -777,19 +855,13 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
                           <div key={r.id} className="p-4 rounded-2xl border border-gray-100 bg-white hover:shadow-md transition-all group">
                             {editingResourceId === r.id ? (
                               <div className="space-y-2">
-                                <div className="flex gap-2">
-                                  <input autoFocus type="text" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} className="flex-1 bg-gray-50 border border-violet-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
-                                  <select value={linkForm.type} onChange={(e) => setLinkForm({ ...linkForm, type: e.target.value })} className="bg-gray-50 border border-violet-200 rounded-lg px-2 text-sm focus:outline-none">
-                                    <option value="Link">رابط</option>
-                                    <option value="Document">وثيقة</option>
-                                    <option value="Video">فيديو</option>
-                                    <option value="Presentation">عرض تقديمي</option>
-                                  </select>
-                                </div>
-                                <div className="flex gap-2">
-                                  <input type="text" value={linkForm.url} onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })} dir="ltr" className="flex-1 bg-gray-50 border border-violet-200 rounded-lg px-2 py-1.5 text-sm focus:outline-none" />
-                                  <button onClick={() => handleUpdateResource(r.id)} className="text-xs font-bold text-violet-600 px-2">حفظ</button>
+                                <input autoFocus type="text" value={linkForm.title} onChange={(e) => setLinkForm({ ...linkForm, title: e.target.value })} placeholder="الاسم..." className="w-full bg-gray-50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                                {r.type === 'Link' && (
+                                  <input type="text" value={linkForm.url} onChange={(e) => setLinkForm({ ...linkForm, url: e.target.value })} dir="ltr" placeholder="https://..." className="w-full bg-gray-50 border border-violet-200 rounded-lg px-3 py-2 text-sm focus:outline-none" />
+                                )}
+                                <div className="flex gap-2 justify-end">
                                   <button onClick={() => setEditingResourceId(null)} className="text-xs text-gray-400 px-2">إلغاء</button>
+                                  <button onClick={() => handleUpdateResource(r.id)} className="text-xs font-bold text-violet-600 px-2">حفظ</button>
                                 </div>
                               </div>
                             ) : (
