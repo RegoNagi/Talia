@@ -46,7 +46,7 @@ export const ConfirmDialogContainer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-gray-900/50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full">
         <p className="text-gray-800 font-bold mb-6 leading-relaxed">{s.message}</p>
         <div className="flex gap-3">

@@ -80,7 +80,7 @@ const AddPeriodModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
+    <div className="fixed inset-0 bg-slate-900/40 flex items-center justify-center z-50 animate-in fade-in duration-200 p-4">
       <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
         <h3 className="text-xl font-bold text-slate-900 mb-6">إضافة حصة جديدة</h3>
 

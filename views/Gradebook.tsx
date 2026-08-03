@@ -1959,7 +1959,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
       {/* Messaging Drawer Placeholder */}
       {showMessagingDrawer && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-fadeIn">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden border border-gray-100">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
               <h3 className="text-xl font-bold text-gray-900">رسالة تدخل</h3>
@@ -2064,7 +2064,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
        {/* إضافة تقييم Modal */}
 
        {isAddingAssessment && (
-         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-fadeIn">
            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
              <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                <h3 className="text-xl font-bold text-gray-900">تقييم جديد</h3>

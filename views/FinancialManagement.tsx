@@ -1730,7 +1730,7 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({ langua
 
       {/* Payment Modal */}
       {isPaymentModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-xl p-6 md:p-8 relative animate-fadeIn shadow-2xl border border-slate-200">
             <div className="flex justify-between items-center mb-8">
               <div>
@@ -1812,7 +1812,7 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({ langua
 
       {/* Invoice Modal */}
       {isInvoiceModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl w-full max-w-3xl p-6 md:p-10 relative animate-fadeIn shadow-2xl border border-slate-200">
             <div className="flex justify-between items-center mb-8">
               <div>
@@ -1907,7 +1907,7 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({ langua
 
       {/* MODAL FOR MESSAGE PARENT */}
       {isMessageModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-none w-full max-w-md p-6 relative">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-800">
@@ -1960,7 +1960,7 @@ export const FinancialManagement: React.FC<FinancialManagementProps> = ({ langua
 
       {/* MODAL FOR INSTALLMENT PLANS */}
       {isPlanModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-slate-900/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-xl w-full max-w-md p-6 relative animate-fadeIn">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-slate-800">

@@ -186,7 +186,7 @@ const EditClassModal: React.FC<{
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
       <div className="bg-white rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-2xl animate-fadeIn">
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الفصل</h3>
@@ -762,7 +762,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
 
          {/* إضافة طالب Modal */}
          {isAddStudentModalOpen && (
-           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50 animate-fadeIn">
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
                <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                  <h3 className="text-xl font-bold text-gray-900">إضافة طالب للقائمة</h3>
@@ -1334,7 +1334,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
 
          {/* استيراد جماعي Modal */}
          {isBulkImportModalOpen && (
-           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 animate-fadeIn">
              <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-100">
                <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                  <div className="flex items-center gap-3">

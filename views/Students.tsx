@@ -148,7 +148,7 @@ const AddStudentModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <div>
@@ -214,7 +214,7 @@ const AddTeacherModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <div>
@@ -303,7 +303,7 @@ const EditTeacherModal: React.FC<{ teacher: any; onClose: () => void; onSubmit: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-xl font-bold text-gray-900">تعديل بيانات المعلم</h3>
@@ -378,7 +378,7 @@ const EditStudentModal: React.FC<{ student: any; onClose: () => void; onSubmit: 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الطالب</h3>
@@ -465,7 +465,7 @@ const AddAdminModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Pr
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <div>
@@ -547,7 +547,7 @@ const EditAdminModal: React.FC<{ admin: any; onClose: () => void; onSubmit: (dat
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
        <div className="bg-white rounded-3xl p-6 md:p-8 max-w-4xl w-full shadow-2xl animate-fadeIn max-h-[90vh] overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
              <h3 className="text-xl font-bold text-gray-900">تعديل بيانات الإداري</h3>
@@ -1376,7 +1376,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
        
        {/* 1. UPLOAD MODAL (Generic) */}
        {uploadModalType && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
              <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-fadeIn">
                 <div className="flex justify-between items-center mb-6">
                    <h3 className="text-xl font-bold text-gray-900">{isRTL ? (uploadModalType === "student" ? "استيراد طلاب" : "استيراد معلمين") : `Bulk Import ${uploadModalType === "student" ? "Students" : "Teachers"}`}</h3>

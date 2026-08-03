@@ -699,7 +699,7 @@ Result: ${doc.gradeAverage}`;
       )}
 
       {isAssigning && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/40 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn p-6">
             <h3 className="font-bold text-xl mb-4 text-gray-900">Issue New Document</h3>
             <div className="space-y-4">
@@ -746,7 +746,7 @@ Result: ${doc.gradeAverage}`;
 
       {/* View Modal */}
       {viewingDocument && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/60 p-4">
           <div className="w-full max-w-3xl relative animate-scaleIn">
              <div className="absolute -top-14 right-0 flex gap-4">
                 <button onClick={() => handleDownload(viewingDocument)} className="text-white hover:text-violet-400 flex items-center gap-2 font-bold text-sm bg-white/10 px-4 py-2 rounded-full backdrop-blur-md">
