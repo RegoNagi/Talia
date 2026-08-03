@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
-import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection, updateClassSection, deleteClassSection, bulkDeleteClassSections } from '../services/supabaseData';
+import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection, updateClassSection, deleteClassSection, bulkDeleteClassSections, addEnrollment, removeEnrollment } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/Button';
@@ -406,21 +406,33 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     const removeStudent = async (studentId: string) => {
       const confirmed = await confirmDialog('متأكد إنك عايز تشيل الطالب ده من قائمة الفصل؟', 'شيل');
       if (confirmed) {
-        setClasses(prev => prev.map(c => 
-          c.id === classData.id 
-            ? { ...c, students: c.students.filter(id => id !== studentId) } 
-            : c
-        ));
+        const ok = await removeEnrollment(studentId, classData.id);
+        if (ok) {
+          setClasses(prev => prev.map(c => 
+            c.id === classData.id 
+              ? { ...c, students: c.students.filter(id => id !== studentId) } 
+              : c
+          ));
+          showToast('تم حذف الطالب من الفصل.', 'success');
+        } else {
+          showToast('حصل خطأ أثناء حذف الطالب من الفصل.', 'error');
+        }
       }
     };
 
-    const addStudent = (studentId: string) => {
-      setClasses(prev => prev.map(c => 
-        c.id === classData.id 
-          ? { ...c, students: [...c.students, studentId] } 
-          : c
-      ));
-      setIsAddStudentModalOpen(false);
+    const addStudent = async (studentId: string) => {
+      const ok = await addEnrollment(studentId, classData.id);
+      if (ok) {
+        setClasses(prev => prev.map(c => 
+          c.id === classData.id 
+            ? { ...c, students: [...c.students, studentId] } 
+            : c
+        ));
+        setIsAddStudentModalOpen(false);
+        showToast('تم إضافة الطالب للفصل.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء إضافة الطالب للفصل.', 'error');
+      }
     };
 
     useEffect(() => {

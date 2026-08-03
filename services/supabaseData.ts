@@ -918,7 +918,12 @@ export async function createGradebookConfig(input: {
   if (input.grades.length > 0) {
     const rows = input.grades.map(g => ({ config_id: configRow.id, grade: g }));
     const { error } = await supabase.from('gradebook_config_grades').insert(rows);
-    if (error) console.error('Error linking gradebook config to grades:', error);
+    if (error) {
+      console.error('Error linking gradebook config to grades:', error);
+      // بدل ما نسيب النظام من غير صفوف مربوطة بيه (يبقى مستحيل نلاقيه بعد كده)، بنمسحه ونرجّع فشل واضح
+      await supabase.from('gradebook_configs').delete().eq('id', configRow.id);
+      return null;
+    }
   }
   return configRow.id;
 }
@@ -1027,3 +1032,23 @@ export async function saveGradeEntries(entries: { studentId: string; assessmentI
   return true;
 }
 
+
+// بيضيف طالب حقيقي لفصل موجود (تسجيل حقيقي في جدول enrollments)
+export async function addEnrollment(studentId: string, sectionId: string): Promise<boolean> {
+  const { error } = await supabase.from('enrollments').insert({ student_id: studentId, section_id: sectionId });
+  if (error) {
+    console.error('Error adding enrollment:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيشيل طالب حقيقي من فصل موجود
+export async function removeEnrollment(studentId: string, sectionId: string): Promise<boolean> {
+  const { error } = await supabase.from('enrollments').delete().eq('student_id', studentId).eq('section_id', sectionId);
+  if (error) {
+    console.error('Error removing enrollment:', error);
+    return false;
+  }
+  return true;
+}
