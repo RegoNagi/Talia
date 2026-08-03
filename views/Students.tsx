@@ -74,6 +74,7 @@ const PERMISSION_GROUPS = [
          { id: 'grades_approve', label: 'اعتماد ونشر الدرجات' },
          { id: 'grades_settings', label: 'إعداد نظام التقييم (الفئات والأوزان)' },
          { id: 'grades_reports', label: 'تقارير الدرجات وبطاقات التقرير' },
+         { id: 'grades_supervise', label: 'مراقبة رصد الدرجات عبر الفصول' },
       ]
    },
    {
@@ -121,7 +122,8 @@ const ALL_PERMISSION_IDS = PERMISSION_GROUPS.flatMap(g => g.perms.map(p => p.id)
 
 const ADMIN_TEMPLATES: Record<string, string[]> = {
     'Super Admin': ALL_PERMISSION_IDS,
-    'Academic Manager': ['curriculum_view', 'curriculum_edit', 'curriculum_library', 'curriculum_lesson_plans', 'classes_view', 'classes_manage', 'schedule_manage', 'grades_view', 'grades_approve', 'grades_reports', 'dashboard_view', 'users_view'],
+    'Academic Manager': ['curriculum_view', 'curriculum_edit', 'curriculum_library', 'curriculum_lesson_plans', 'classes_view', 'classes_manage', 'schedule_manage', 'grades_view', 'grades_approve', 'grades_reports', 'grades_supervise', 'dashboard_view', 'users_view'],
+    'مشرف مرحلة': ['classes_view', 'attendance_view', 'attendance_reports', 'grades_view', 'grades_supervise', 'grades_reports', 'dashboard_view'],
     'Registrar': ['users_view', 'users_create', 'users_reset', 'classes_view', 'classes_manage', 'attendance_view', 'attendance_reports', 'dashboard_view'],
     'Finance Officer': ['fin_view', 'fin_manage', 'dashboard_view', 'dashboard_financial_widgets'],
     'IT Support': ['sys_settings', 'sys_logs', 'users_reset', 'users_view']

@@ -4,7 +4,7 @@ import { MOCK_GRADEBOOK } from '../services/mockData';
 import {
   getGradebookConfigs, createGradebookConfig, updateGradebookConfigStatus,
   getOrCreateDefaultTerm, getAssessments, createAssessment as createAssessmentSvc, deleteAssessment as deleteAssessmentSvc,
-  getGradeEntries, saveGradeEntries, getStudents
+  getGradeEntries, saveGradeEntries, getStudents, getClassSections
 } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
@@ -160,6 +160,7 @@ const CreateGradebookConfigModal: React.FC<{ onClose: () => void; onSubmit: (dat
 export const Gradebook: React.FC<GradebookProps> = ({ role, language, permissions = [] }) => {
   const canEnterGrades = permissions.length === 0 || permissions.includes('grades_enter');
   const canApproveGrades = permissions.length === 0 || permissions.includes('grades_approve');
+  const canSupervise = permissions.length === 0 || permissions.includes('grades_supervise');
   const [config, setConfig] = useState<GradebookConfig>(MOCK_GRADEBOOK);
   const [activeTab, setActiveTab] = useState<'admin' | 'teacher' | 'approvals'>(role === UserRole.ADMIN ? 'admin' : 'teacher');
   const [adminStep, setAdminStep] = useState(1);
@@ -170,6 +171,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
   const [gradebooksData, setGradebooksData] = useState<{ id: string; name: string; grades: string; gradesList: string[]; students: string; year: string; status: 'draft' | 'pending' | 'approved' | 'archived' }[]>([]);
   const [configsLoading, setConfigsLoading] = useState(true);
   const [realStudents, setRealStudents] = useState<any[]>([]);
+  const [realClassSections, setRealClassSections] = useState<any[]>([]);
+  const [supervisionClassId, setSupervisionClassId] = useState<string | null>(null);
+  const [classGradeFilter, setClassGradeFilter] = useState('All');
+  const [classSearchQuery, setClassSearchQuery] = useState('');
   const [defaultTermId, setDefaultTermId] = useState<string>('');
   React.useEffect(() => {
     if (defaultTermId) setActiveTermId(defaultTermId);
@@ -211,6 +216,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
   React.useEffect(() => {
     refreshConfigs();
     getStudents().then(setRealStudents);
+    getClassSections().then(setRealClassSections);
     getOrCreateDefaultTerm().then(t => setDefaultTermId(t.id));
   }, []);
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -437,92 +443,109 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
   // --- Components ---
 
-  const ClassSelector = () => (
-    <div className="space-y-6 animate-fadeIn">
-      <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
-        <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
-          <div className="relative flex-1 w-full">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="البحث عن فصول..."
-              value={classFilters.search}
-              onChange={(e) => setClassFilters({...classFilters, search: e.target.value})}
-              className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
-            />
+  const ClassAndSubjectSelector = () => {
+    if (!supervisionClassId) {
+      const filteredClasses = realClassSections.filter(c =>
+        (classGradeFilter === 'All' || c.gradeLevel === classGradeFilter) &&
+        c.name.toLowerCase().includes(classSearchQuery.toLowerCase())
+      );
+      return (
+        <div className="space-y-6 animate-fadeIn">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-6">
+            <div className="flex flex-col lg:flex-row gap-4 justify-between items-start lg:items-center">
+              <div className="relative flex-1 w-full">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="البحث عن فصول..."
+                  value={classSearchQuery}
+                  onChange={(e) => setClassSearchQuery(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
+                />
+              </div>
+              <div className="relative w-full md:w-auto">
+                <select
+                  value={classGradeFilter}
+                  onChange={(e) => setClassGradeFilter(e.target.value)}
+                  className="appearance-none w-full p-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium text-gray-800 transition-all cursor-pointer hover:bg-gray-100/50 text-sm"
+                >
+                  <option value="All">جميع الصفوف</option>
+                  {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g} value={g}>{g}</option>)}
+                </select>
+                <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-            <div className="relative w-full md:w-auto">
-               <select 
-                 value={classFilters.grade}
-                 onChange={(e) => setClassFilters({...classFilters, grade: e.target.value})}
-                 className="appearance-none w-full p-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium text-gray-800 transition-all cursor-pointer hover:bg-gray-100/50 text-sm"
-               >
-                 <option value="All">جميع الصفوف</option>
-                 {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g} value={g}>{g}</option>)}
-               </select>
-               <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            <div className="relative w-full md:w-auto">
-               <select 
-                 value={classSort}
-                 onChange={(e) => setClassSort(e.target.value as any)}
-                 className="appearance-none w-full p-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium text-gray-800 transition-all cursor-pointer hover:bg-gray-100/50 text-sm"
-               >
-                 <option value="name">ترتيب حسب الاسم</option>
-                 <option value="grade">ترتيب حسب الصف</option>
-                 <option value="year">ترتيب حسب السنة</option>
-               </select>
-               <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-            </div>
-            <Button onClick={() => setIsCreateConfigOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
-               <Plus size={18} className="mr-2" /> إنشاء نظام درجات جديد
-            </Button>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredClasses.map(cls => (
+              <div
+                key={cls.id}
+                onClick={() => setSupervisionClassId(cls.id)}
+                className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-none hover:border-gray-300 transition-all cursor-pointer relative overflow-hidden flex flex-col"
+              >
+                <div className="absolute top-0 left-0 w-full h-1.5 bg-violet-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center text-violet-600 group-hover:bg-violet-100 transition-colors mb-4">
+                  <School size={24} />
+                </div>
+                <h3 className="text-lg font-bold text-gray-800 mb-1">{cls.name}</h3>
+                <p className="text-sm text-gray-500 mb-4">{cls.gradeLevel}</p>
+                <div className="flex items-center justify-between pt-4 border-t border-gray-50">
+                  <div className="flex items-center gap-2 text-xs text-gray-400">
+                    <Users size={14} /> {(cls.students || []).length} طالب
+                  </div>
+                  <ArrowRight size={18} className="text-violet-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
+                </div>
+              </div>
+            ))}
+            {filteredClasses.length === 0 && (
+              <div className="col-span-full py-20 text-center">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Filter size={32} className="text-gray-300" />
+                </div>
+                <p className="text-gray-500">لم يتم العثور على فصول تطابق عوامل التصفية الخاصة بك.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // فصل متاختار، دلوقتي نختار المادة (نظام الدرجات) اللي عايزين نراقبه
+    const cls = realClassSections.find(c => c.id === supervisionClassId);
+    const applicableConfigs = gradebooksData.filter(g => (g as any).gradesList?.includes(cls?.gradeLevel));
+    return (
+      <div className="space-y-6 animate-fadeIn">
+        <button onClick={() => setSupervisionClassId(null)} className="flex items-center gap-2 text-sm font-bold text-violet-600 hover:underline">
+          <ArrowRight size={16} className="rotate-180" /> رجوع لاختيار الفصل
+        </button>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+          <h2 className="text-xl font-bold text-gray-900 mb-1">{cls?.name}</h2>
+          <p className="text-sm text-gray-500 mb-6">اختار المادة اللي عايز تراقب رصد درجاتها</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {applicableConfigs.map(config => (
+              <div
+                key={config.id}
+                onClick={() => setSelectedClassId(config.id)}
+                className="group bg-gray-50 p-5 rounded-2xl border border-gray-100 hover:border-violet-300 hover:bg-white transition-all cursor-pointer"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <BookOpen size={20} className="text-violet-600" />
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${config.status === 'draft' ? 'bg-gray-100 text-gray-600 border-gray-200' : config.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
+                    {config.status === 'draft' ? 'مسودة' : config.status === 'pending' ? 'طلب اعتماد' : 'معتمد'}
+                  </span>
+                </div>
+                <h3 className="font-bold text-gray-800">{config.name}</h3>
+              </div>
+            ))}
+            {applicableConfigs.length === 0 && (
+              <p className="col-span-full text-center text-gray-400 py-10">مفيش نظام درجات معمول للصف ده لسه.</p>
+            )}
           </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredSchemas.map(schema => (
-          <div 
-            key={schema.id}
-            onClick={() => setSelectedClassId(schema.id)}
-            className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-none hover:border-gray-300 transition-all cursor-pointer relative overflow-hidden flex flex-col"
-          >
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-violet-500 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-            <div className="flex justify-between items-start mb-4">
-              <div className="w-12 h-12 bg-violet-50 rounded-xl flex items-center justify-center text-violet-600 group-hover:bg-violet-100 transition-colors">
-                <School size={24} />
-              </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded border uppercase ${schema.status === 'draft' ? 'bg-gray-100 text-gray-600 border-gray-200' : schema.status === 'pending' ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100'}`}>
-                {schema.status === 'draft' ? 'مسودة' : schema.status === 'pending' ? 'طلب اعتماد' : 'معتمد'}
-              </span>
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-1">{schema.name}</h3>
-            <p className="text-sm text-gray-500 mb-4">{schema.grades}</p>
-            <div className="flex items-center justify-between pt-4 border-t border-gray-50">
-              <div className="flex items-center gap-2 text-xs text-gray-400">
-                <Users size={14} /> {schema.students} • {schema.year}
-              </div>
-              <ArrowRight size={18} className="text-violet-500 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
-            </div>
-            <div className="mt-4 pt-3 border-t border-gray-50 flex justify-end">
-              <span className="text-xs font-bold text-violet-600 group-hover:underline">عرض المواد →</span>
-            </div>
-          </div>
-        ))}
-        {filteredSchemas.length === 0 && (
-          <div className="col-span-full py-20 text-center">
-            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Filter size={32} className="text-gray-300" />
-            </div>
-            <p className="text-gray-500">لم يتم العثور على فصول تطابق عوامل التصفية الخاصة بك.</p>
-            <button onClick={() => setClassFilters({grade: 'All', search: ''})} className="text-violet-600 font-bold mt-2 hover:underline">مسح جميع عوامل التصفية</button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const ApprovalsView = () => {
     const pendingSchemas = gradebooksData.filter(g => g.status === 'pending');
@@ -1454,7 +1477,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
 
   const TeacherView = () => {
     const selectedClass = gradebooksData.find(c => c.id === selectedClassId);
-    const eligibleStudents = realStudents.filter(s => (selectedClass?.gradesList || []).includes(s.grade));
+    const supervisedClass = realClassSections.find(c => c.id === supervisionClassId);
+    const eligibleStudents = supervisedClass
+      ? realStudents.filter(s => (supervisedClass.students || []).includes(s.id))
+      : realStudents.filter(s => (selectedClass?.gradesList || []).includes(s.grade));
     const subjects = ['جميع المواد', 'الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
     const displaySubjects = ['الرياضيات', 'الفيزياء', 'الأحياء', 'اللغة الإنجليزية', 'اللغة العربية'];
 
@@ -1855,34 +1881,43 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
           </div>
           
           {role === UserRole.ADMIN && (
-             <div className="bg-white p-1 rounded-full border border-gray-200 shadow-sm flex items-center">
-                <button 
-                  onClick={() => setActiveTab('admin')}
-                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'admin' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  إعدادات الإدارة
-                </button>
-                <button 
-                  onClick={() => setActiveTab('teacher')}
-                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'teacher' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  عرض المعلم
-                </button>
-                <button 
-                  onClick={() => setActiveTab('approvals')}
-                  className={`relative px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'approvals' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
-                >
-                  الاعتمادات
-                  {status === 'pending' && (
-                    <span className="absolute top-1 right-2 w-2 h-2 bg-purple-500 rounded-full border border-white"></span>
+             <div className="flex items-center gap-3">
+               <div className="bg-white p-1 rounded-full border border-gray-200 shadow-sm flex items-center">
+                  <button 
+                    onClick={() => setActiveTab('admin')}
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'admin' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    إعدادات الإدارة
+                  </button>
+                  {canSupervise && (
+                  <button 
+                    onClick={() => { setActiveTab('teacher'); setSupervisionClassId(null); setSelectedClassId(null); }}
+                    className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'teacher' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    الإشراف والمتابعة
+                  </button>
                   )}
-                </button>
+                  <button 
+                    onClick={() => setActiveTab('approvals')}
+                    className={`relative px-4 py-2 rounded-full text-sm font-bold transition-all ${activeTab === 'approvals' ? 'bg-gray-900 text-white shadow-md' : 'text-gray-500 hover:text-gray-900'}`}
+                  >
+                    الاعتمادات
+                    {status === 'pending' && (
+                      <span className="absolute top-1 right-2 w-2 h-2 bg-purple-500 rounded-full border border-white"></span>
+                    )}
+                  </button>
+               </div>
+               {activeTab === 'admin' && (
+                 <Button onClick={() => setIsCreateConfigOpen(true)} className="bg-violet-600 hover:bg-violet-700 text-white whitespace-nowrap">
+                    <Plus size={18} className="mr-2" /> إنشاء نظام درجات جديد
+                 </Button>
+               )}
              </div>
           )}
        </div>
 
        {!selectedClassId && activeTab === 'teacher' ? (
-         ClassSelector()
+         ClassAndSubjectSelector()
        ) : activeTab === 'admin' ? (
          AdminJourney()
        ) : activeTab === 'approvals' ? (
