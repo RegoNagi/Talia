@@ -1085,3 +1085,13 @@ export async function updateGradebookConfig(input: {
   }
   return true;
 }
+
+// بيجيب مواد المنهج الدراسي الحقيقية لصف معيّن (المصدر الصح لقايمة المواد، مش سجلات الدرجات)
+export async function getCurriculumSubjects(grade: string): Promise<string[]> {
+  const { data, error } = await supabase.from('curriculum_subjects').select('subject').eq('grade', grade);
+  if (error) {
+    console.error('Error fetching curriculum subjects:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => row.subject);
+}

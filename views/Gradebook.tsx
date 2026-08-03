@@ -4,7 +4,7 @@ import { MOCK_GRADEBOOK } from '../services/mockData';
 import {
   getGradebookConfigs, createGradebookConfig, updateGradebookConfigStatus, updateGradebookConfig,
   getOrCreateDefaultTerm, getAssessments, createAssessment as createAssessmentSvc, deleteAssessment as deleteAssessmentSvc,
-  getGradeEntries, saveGradeEntries, getStudents, getClassSections
+  getGradeEntries, saveGradeEntries, getStudents, getClassSections, getCurriculumSubjects
 } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
@@ -175,30 +175,36 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     return totalWeightUsed === 0 ? 0 : Math.round(totalWeighted / totalWeightUsed);
   };
 
-  // كل المواد المعتمدة الحقيقية اللي تخص صف الفصل اللي بنراقبه دلوقتي، ودرجات الطلاب الحقيقية فيها
-  const [allSubjectsConfigs, setAllSubjectsConfigs] = useState<{ id: string; name: string; categoryWeights: Record<string, number> }[]>([]);
+  // كل المواد الحقيقية من المنهج الدراسي لصف الفصل اللي بنراقبه، ودرجات الطلاب الحقيقية فيها (لو فيه نظام درجات معتمد للمادة دي)
+  const [curriculumSubjects, setCurriculumSubjects] = useState<string[]>([]);
   const [allSubjectsGrades, setAllSubjectsGrades] = useState<Record<string, Record<string, number>>>({});
 
   React.useEffect(() => {
-    if (!supervisionClassId) { setAllSubjectsConfigs([]); setAllSubjectsGrades({}); return; }
+    if (!supervisionClassId) { setCurriculumSubjects([]); setAllSubjectsGrades({}); return; }
     const cls = realClassSections.find((c: any) => c.id === supervisionClassId);
     if (!cls) return;
-    const applicable = gradebooksData.filter((g: any) => g.status === 'approved' && g.gradesList?.includes(cls.gradeLevel));
-    const configsSummary = applicable.map((g: any) => ({ id: g.id, name: g.name, categoryWeights: g.categoryWeights || {} }));
-    setAllSubjectsConfigs(configsSummary);
-    const classStudentIds: string[] = cls.students || [];
-
-    Promise.all(applicable.map((g: any) => Promise.all([getAssessments(g.id), getGradeEntries(g.id)]))).then((results) => {
-      const gradesMap: Record<string, Record<string, number>> = {};
-      applicable.forEach((g: any, idx: number) => {
-        const [assessments, entries] = results[idx];
-        const studentGrades: Record<string, number> = {};
-        classStudentIds.forEach((sid) => {
-          studentGrades[sid] = computeWeightedGrade(assessments as any[], entries as any[], g.categoryWeights || {}, sid);
+    getCurriculumSubjects(cls.gradeLevel).then((subjects) => {
+      setCurriculumSubjects(subjects);
+      const classStudentIds: string[] = cls.students || [];
+      // لكل مادة من مواد المنهج، بندوّر هل فيه نظام درجات معتمد ليها لنفس الصف
+      const relevantConfigs = subjects.map((subj) =>
+        (gradebooksData.find((g: any) => g.status === 'approved' && g.name === subj && g.gradesList?.includes(cls.gradeLevel)) as any) || null
+      );
+      Promise.all(
+        relevantConfigs.map((cfg) => (cfg ? Promise.all([getAssessments(cfg.id), getGradeEntries(cfg.id)]) : Promise.resolve([[], []])))
+      ).then((results) => {
+        const gradesMap: Record<string, Record<string, number>> = {};
+        subjects.forEach((subj, idx) => {
+          const [assessments, entries] = results[idx] as [any[], any[]];
+          const cfg = relevantConfigs[idx];
+          const studentGrades: Record<string, number> = {};
+          classStudentIds.forEach((sid) => {
+            studentGrades[sid] = cfg ? computeWeightedGrade(assessments, entries, cfg.categoryWeights || {}, sid) : 0;
+          });
+          gradesMap[subj] = studentGrades;
         });
-        gradesMap[g.id] = studentGrades;
+        setAllSubjectsGrades(gradesMap);
       });
-      setAllSubjectsGrades(gradesMap);
     });
   }, [supervisionClassId, gradebooksData, realClassSections]);
 
@@ -750,9 +756,9 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                        onClick={async () => {
                        if (adminStep === 3) {
                          if (!subjectNameInput.trim() || selectedTargetGrades.length === 0) return;
-                         setStatus('approved');
+                         setStatus('pending');
                          if (selectedClassId) {
-                           // نظام موجود بالفعل — نعدّله ونعتمده مباشرة
+                           // نظام موجود بالفعل — نعدّله ونرسله لطلب اعتماد
                            await updateGradebookConfig({
                              configId: selectedClassId,
                              subjectName: subjectNameInput,
@@ -760,11 +766,11 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                              passingScore: config.passingScore,
                              categoryWeights: config.categoryWeights,
                            });
-                           await updateGradebookConfigStatus(selectedClassId, 'approved');
+                           await updateGradebookConfigStatus(selectedClassId, 'pending');
                            refreshConfigs();
-                           showToast(`تم اعتماد نظام الدرجات "${subjectNameInput}" ونشره بنجاح.`, 'success');
+                           showToast(`تم إرسال نظام الدرجات "${subjectNameInput}" لطلب الاعتماد.`, 'success');
                          } else {
-                           // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة، ونعتمده على طول
+                           // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة
                            const newId = await createGradebookConfig({
                              subjectName: subjectNameInput,
                              grades: selectedTargetGrades,
@@ -772,23 +778,22 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                              categoryWeights: config.categoryWeights,
                            });
                            if (newId) {
-                             await updateGradebookConfigStatus(newId, 'approved');
+                             await updateGradebookConfigStatus(newId, 'pending');
                              refreshConfigs();
-                             showToast(`تم إنشاء نظام الدرجات "${subjectNameInput}" واعتماده بنجاح.`, 'success');
+                             showToast(`تم إنشاء نظام الدرجات "${subjectNameInput}" وإرساله لطلب الاعتماد.`, 'success');
                            } else {
                              showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
                              return;
                            }
                          }
-                         // مش بننقّل المستخدم لأي مكان تاني — ممكن يكون شخص تاني هو اللي هيراقب الفصول بعدين.
-                         // بس نرجّع الشاشة لوضع "إنشاء جديد" فاضي جاهز
+                         // مش بننقّل المستخدم لأي مكان تاني — الاعتماد النهائي بيحصل من تاب "الاعتمادات"
                          setSelectedClassId(null);
                          setAdminStep(1);
                        } else {
                          setAdminStep(s => Math.min(3, s + 1));
                        }
                      }}>
-                        {adminStep === 3 ? 'اعتماد' : 'الخطوة التالية'}
+                        {adminStep === 3 ? 'إرسال للاعتماد' : 'الخطوة التالية'}
                      </Button>
                   </>
                 )}
@@ -832,9 +837,25 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                {canApproveGrades && (
                <button 
                   className="bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2 rounded-md font-medium shadow-none transition-colors"
-                  onClick={() => {
-                     if (selectedClassId) updateGradebookConfigStatus(selectedClassId, 'approved').then(() => refreshConfigs());
-                     setGradebooksData(gradebooksData.map(g => g.id === selectedClassId ? { ...g, status: 'approved' } : g));
+                  onClick={async () => {
+                     if (!selectedClassId) return;
+                     const thisConfig = gradebooksData.find(g => g.id === selectedClassId) as any;
+                     const conflict = gradebooksData.find((g: any) =>
+                       g.id !== selectedClassId &&
+                       g.status === 'approved' &&
+                       g.name === thisConfig?.name &&
+                       (g.gradesList || []).some((gr: string) => (thisConfig?.gradesList || []).includes(gr))
+                     ) as any;
+                     if (conflict) {
+                       const confirmed = await confirmDialog(
+                         `فيه نظام درجات معتمد بالفعل لمادة "${thisConfig?.name}" لنفس الصف (اسمه "${conflict.name}"). لو كمّلت، النظام القديم هيرجع مسودة والنظام ده هيبقى هو المعتمد. تحب تكمّل؟`,
+                         'استبدال واعتماد'
+                       );
+                       if (!confirmed) return;
+                       await updateGradebookConfigStatus(conflict.id, 'draft');
+                     }
+                     await updateGradebookConfigStatus(selectedClassId, 'approved');
+                     refreshConfigs();
                      setActiveTab('approvals');
                      setSelectedClassId(null);
                   }}
@@ -1428,6 +1449,47 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                         className="bg-purple-600 text-white shadow-none px-10 py-3 text-lg" 
                         disabled={totalWeight !== 100 || !subjectNameInput.trim() || selectedTargetGrades.length === 0}
                         onClick={async () => {
+                           setStatus('pending');
+                           if (selectedClassId) {
+                             await updateGradebookConfig({ configId: selectedClassId, subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                             await updateGradebookConfigStatus(selectedClassId, 'pending');
+                             refreshConfigs();
+                             showToast(`تم إرسال نظام الدرجات "${subjectNameInput}" لطلب الاعتماد.`, 'success');
+                           } else {
+                             const newId = await createGradebookConfig({ subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
+                             if (newId) {
+                               await updateGradebookConfigStatus(newId, 'pending');
+                               refreshConfigs();
+                               showToast(`تم إنشاء نظام الدرجات "${subjectNameInput}" وإرساله لطلب الاعتماد.`, 'success');
+                             } else {
+                               showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
+                               return;
+                             }
+                           }
+                           setAdminStep(1);
+                           setSelectedClassId(null);
+                        }}
+                      >
+                         إرسال للاعتماد
+                      </Button>
+                      <Button
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-none px-10 py-3 text-lg"
+                        disabled={totalWeight !== 100 || !subjectNameInput.trim() || selectedTargetGrades.length === 0}
+                        onClick={async () => {
+                           const conflict = gradebooksData.find((g: any) =>
+                             g.id !== selectedClassId &&
+                             g.status === 'approved' &&
+                             g.name === subjectNameInput &&
+                             (g.gradesList || []).some((gr: string) => selectedTargetGrades.includes(gr))
+                           ) as any;
+                           if (conflict) {
+                             const confirmed = await confirmDialog(
+                               `فيه نظام درجات معتمد بالفعل لمادة "${subjectNameInput}" لنفس الصف (اسمه "${conflict.name}"). لو كمّلت، النظام القديم هيرجع مسودة وده هيبقى هو المعتمد. تحب تكمّل؟`,
+                               'استبدال واعتماد'
+                             );
+                             if (!confirmed) return;
+                             await updateGradebookConfigStatus(conflict.id, 'draft');
+                           }
                            setStatus('approved');
                            if (selectedClassId) {
                              await updateGradebookConfig({ configId: selectedClassId, subjectName: subjectNameInput, grades: selectedTargetGrades, passingScore: config.passingScore, categoryWeights: config.categoryWeights });
@@ -1507,13 +1569,11 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
     const eligibleStudents = supervisedClass
       ? realStudents.filter(s => (supervisedClass.students || []).includes(s.id))
       : realStudents.filter(s => (selectedClass?.gradesList || []).includes(s.grade));
-    const subjects = ['جميع المواد', ...allSubjectsConfigs.map(c => c.name)];
-    const displaySubjects = allSubjectsConfigs.map(c => c.name);
+    const subjects = ['جميع المواد', ...curriculumSubjects];
+    const displaySubjects = curriculumSubjects;
 
     const getStudentSubjectGrade = (studentId: string, subject: string, _termId: string) => {
-      const cfg = allSubjectsConfigs.find(c => c.name === subject);
-      if (!cfg) return 0;
-      return allSubjectsGrades[cfg.id]?.[studentId] ?? 0;
+      return allSubjectsGrades[subject]?.[studentId] ?? 0;
     };
     
     return (
