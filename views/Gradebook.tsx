@@ -695,9 +695,9 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                        onClick={async () => {
                        if (adminStep === 3) {
                          if (!subjectNameInput.trim() || selectedTargetGrades.length === 0) return;
-                         setStatus('pending');
+                         setStatus('approved');
                          if (selectedClassId) {
-                           // نظام موجود بالفعل — نعدّله
+                           // نظام موجود بالفعل — نعدّله ونعتمده مباشرة
                            await updateGradebookConfig({
                              configId: selectedClassId,
                              subjectName: subjectNameInput,
@@ -705,10 +705,11 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                              passingScore: config.passingScore,
                              categoryWeights: config.categoryWeights,
                            });
-                           await updateGradebookConfigStatus(selectedClassId, 'pending');
+                           await updateGradebookConfigStatus(selectedClassId, 'approved');
                            refreshConfigs();
+                           showToast('تم اعتماد نظام الدرجات ونشره.', 'success');
                          } else {
-                           // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة
+                           // مفيش نظام محدد — يبقى إحنا بصدد إنشاء واحد جديد بالكامل من نفس الشاشة، ونعتمده على طول
                            const newId = await createGradebookConfig({
                              subjectName: subjectNameInput,
                              grades: selectedTargetGrades,
@@ -716,9 +717,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                              categoryWeights: config.categoryWeights,
                            });
                            if (newId) {
-                             await updateGradebookConfigStatus(newId, 'pending');
+                             await updateGradebookConfigStatus(newId, 'approved');
                              refreshConfigs();
                              setSelectedClassId(newId);
+                             showToast('تم إنشاء نظام الدرجات واعتماده بنجاح.', 'success');
                            } else {
                              showToast('حصل خطأ أثناء إنشاء نظام الدرجات.', 'error');
                              return;
@@ -730,7 +732,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                          setAdminStep(s => Math.min(3, s + 1));
                        }
                      }}>
-                        {adminStep === 3 ? 'طلب اعتماد' : 'الخطوة التالية'}
+                        {adminStep === 3 ? 'اعتماد' : 'الخطوة التالية'}
                      </Button>
                   </>
                 )}
