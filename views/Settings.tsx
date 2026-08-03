@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Language, UserRole, SettingsTab, Course, AcademicYearConfig, Holiday, TimetableEvent, NotificationSettings, NotificationChannel, NotificationCategory, NotificationTrigger, ClassSpace, SpaceGovernance } from '../types';
 import { Button } from '../components/Button';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { showToast } from '../components/Toast';
 import { saveAcademicYearSettings } from '../services/supabaseData';
+import { getAllCurriculumSubjectsWithGrade, addCurriculumSubject, updateCurriculumSubjectById, removeCurriculumSubjectById, getTerms, createTerm, updateTerm, deleteTerm } from '../services/supabaseData';
 import { 
   generateConflictFreeSchedule,
   simulateHolidayImpact,
@@ -186,8 +187,29 @@ const MOCK_SPACES: ClassSpace[] = [
 
 export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>(SettingsTab.COURSES);
-  const [courses, setCourses] = useState<Course[]>(MOCK_COURSES);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [coursesLoading, setCoursesLoading] = useState(true);
+  const refreshCourses = () => {
+    setCoursesLoading(true);
+    getAllCurriculumSubjectsWithGrade().then((subs) => {
+      setCourses(subs.map(s => ({
+        id: s.id,
+        code: s.code,
+        nameEn: s.nameEn,
+        nameAr: s.subject,
+        gradeLevel: s.grade,
+        credits: s.credits,
+        department: s.department,
+        color: s.color,
+      })));
+      setCoursesLoading(false);
+    });
+  };
+  useEffect(() => {
+    refreshCourses();
+  }, []);
   const [searchQuery, setSearchQuery] = useState('');
+  const [courseGradeFilter, setCourseGradeFilter] = useState('');
   const [courseViewMode, setCourseViewMode] = useState<'BROWSE' | 'WIZARD'>('BROWSE');
   const [subjectCreationStep, setSubjectCreationStep] = useState(1);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
@@ -263,12 +285,14 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     setCreationStep(1);
   };
 
-  const handleAddTerm = () => {
+  const handleAddTerm = async () => {
     const termCount = academicYear.terms.length + 1;
+    const nameAr = `الفصل الدراسي ${termCount}`;
+    const realId = await createTerm(nameAr, '', '');
     const newTerm = {
-      id: `t-${Date.now()}`,
+      id: realId || `t-${Date.now()}`,
       nameEn: `Term ${termCount}`,
-      nameAr: `الفصل الدراسي ${termCount}`,
+      nameAr,
       startDate: '',
       endDate: '',
       gracePeriodDays: 5,
@@ -652,29 +676,35 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     credits: 3,
     department: 'General',
     color: 'bg-violet-500',
-    gradeLevel: 'Grade 10'
+    gradeLevel: 'الصف 9'
   });
 
   const isRTL = language === Language.AR;
 
-  const handleAddCourse = () => {
+  const handleAddCourse = async () => {
     if (!newCourse.code || !newCourse.nameEn || !newCourse.nameAr) return;
-    
-    const course: Course = {
-      id: `c-${Date.now()}`,
-      code: newCourse.code!,
-      nameEn: newCourse.nameEn!,
-      nameAr: newCourse.nameAr!,
-      credits: newCourse.credits || 0,
-      department: newCourse.department || 'General',
-      color: newCourse.color || 'bg-violet-500',
-      gradeLevel: newCourse.gradeLevel || 'Grade 10'
-    };
 
-    setCourses([course, ...courses]);
-    setCourseViewMode('BROWSE');
-    setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'Grade 10' });
+    const ok = await addCurriculumSubject({
+      grade: newCourse.gradeLevel || 'الصف 9',
+      subject: newCourse.nameAr!,
+      code: newCourse.code,
+      nameEn: newCourse.nameEn,
+      department: newCourse.department || 'General',
+      credits: newCourse.credits || 3,
+      color: newCourse.color || 'bg-violet-500',
+    });
+
+    if (ok) {
+      refreshCourses();
+      showToast('تم إضافة المادة بنجاح.', 'success');
+      setCourseViewMode('BROWSE');
+      setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
+    } else {
+      showToast('حصل خطأ أثناء إضافة المادة (ممكن تكون موجودة بالفعل لنفس الصف).', 'error');
+    }
   };
+
+
 
   const handleAddTrigger = () => {
     if (!newTrigger.nameEn || !newTrigger.nameAr) return;
@@ -812,14 +842,21 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const handleDeleteCourse = async (id: string) => {
     const confirmed = await confirmDialog(isRTL ? 'هل أنت متأكد من حذف هذا المقرر؟' : 'Are you sure you want to delete this course?', isRTL ? 'حذف' : 'Delete');
     if (confirmed) {
-      setCourses(courses.filter(c => c.id !== id));
+      const ok = await removeCurriculumSubjectById(id);
+      if (ok) {
+        refreshCourses();
+        showToast('تم حذف المادة.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء الحذف.', 'error');
+      }
     }
   };
 
   const filteredCourses = courses.filter(c => 
-    c.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (c.nameEn.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.nameAr.includes(searchQuery) ||
-    c.code.toLowerCase().includes(searchQuery.toLowerCase())
+    c.code.toLowerCase().includes(searchQuery.toLowerCase())) &&
+    (!courseGradeFilter || c.gradeLevel === courseGradeFilter)
   );
 
   const tabs = [
@@ -922,12 +959,12 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
                   </div>
-                  <select className="flex-1 bg-white border border-slate-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-none text-gray-600 outline-none">
+                  <select value={courseGradeFilter} onChange={(e) => setCourseGradeFilter(e.target.value)} className="flex-1 bg-white border border-slate-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-none text-gray-600 outline-none">
                     <option value="">{isRTL ? 'كل الصفوف' : 'All Grades'}</option>
-                    <option value="9">{isRTL ? 'الصف 9' : 'Grade 9'}</option>
-                    <option value="10">{isRTL ? 'الصف 10' : 'Grade 10'}</option>
-                    <option value="11">{isRTL ? 'الصف 11' : 'Grade 11'}</option>
-                    <option value="12">{isRTL ? 'الصف 12' : 'Grade 12'}</option>
+                    <option value="الصف 9">{isRTL ? 'الصف 9' : 'Grade 9'}</option>
+                    <option value="الصف 10">{isRTL ? 'الصف 10' : 'Grade 10'}</option>
+                    <option value="الصف 11">{isRTL ? 'الصف 11' : 'Grade 11'}</option>
+                    <option value="الصف 12">{isRTL ? 'الصف 12' : 'Grade 12'}</option>
                   </select>
                   <select className="flex-1 bg-white border border-slate-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-none text-gray-600 outline-none">
                     <option value="">{isRTL ? 'الفصل الدراسي' : 'All Terms'}</option>
@@ -1134,10 +1171,10 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                   onChange={(e) => setNewCourse({...newCourse, gradeLevel: e.target.value})}
                                   className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-violet-500 transition-all appearance-none"
                                 >
-                                  <option value="Grade 9">Grade 9</option>
-                                  <option value="Grade 10">Grade 10</option>
-                                  <option value="Grade 11">Grade 11</option>
-                                  <option value="Grade 12">Grade 12</option>
+                                  <option value="الصف 9">الصف 9</option>
+                                  <option value="الصف 10">الصف 10</option>
+                                  <option value="الصف 11">الصف 11</option>
+                                  <option value="الصف 12">الصف 12</option>
                                 </select>
                               </div>
                               <div className="space-y-2 md:col-span-2">
@@ -1690,6 +1727,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                       const newTerms = [...academicYear.terms];
                                       newTerms[idx].startDate = e.target.value;
                                       setAcademicYear({...academicYear, terms: newTerms});
+                                      updateTerm(term.id, term.nameAr, e.target.value, term.endDate);
                                     }}
                                     className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm"
                                   />
@@ -1703,6 +1741,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                       const newTerms = [...academicYear.terms];
                                       newTerms[idx].endDate = e.target.value;
                                       setAcademicYear({...academicYear, terms: newTerms});
+                                      updateTerm(term.id, term.nameAr, term.startDate, e.target.value);
                                     }}
                                     className="w-full p-2 bg-white border border-gray-200 rounded-lg text-sm"
                                   />

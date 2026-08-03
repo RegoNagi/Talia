@@ -862,6 +862,24 @@ export async function createTerm(name: string, startDate: string, endDate: strin
   return data.id;
 }
 
+export async function updateTerm(termId: string, name: string, startDate: string, endDate: string): Promise<boolean> {
+  const { error } = await supabase.from('grading_terms').update({ name, start_date: startDate || null, end_date: endDate || null }).eq('id', termId);
+  if (error) {
+    console.error('Error updating term:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteTerm(termId: string): Promise<boolean> {
+  const { error } = await supabase.from('grading_terms').delete().eq('id', termId);
+  if (error) {
+    console.error('Error deleting term:', error);
+    return false;
+  }
+  return true;
+}
+
 // بيجيب كل إعدادات الدرجات (مادة + الصفوف المشتركة فيها + حالة الاعتماد)
 export async function getGradebookConfigs(): Promise<{
   id: string;
@@ -1108,8 +1126,8 @@ export async function getAllDistinctSubjects(): Promise<string[]> {
   return Array.from(new Set((data || []).map((row: any) => row.subject))).sort();
 }
 
-export async function getCurriculumSubjectsDetailed(grade: string): Promise<{ subject: string; code: string; nameEn: string; department: string }[]> {
-  const { data, error } = await supabase.from('curriculum_subjects').select('subject, code, name_en, department').eq('grade', grade);
+export async function getCurriculumSubjectsDetailed(grade: string): Promise<{ subject: string; code: string; nameEn: string; department: string; credits: number; color: string }[]> {
+  const { data, error } = await supabase.from('curriculum_subjects').select('subject, code, name_en, department, credits, color').eq('grade', grade);
   if (error) {
     console.error('Error fetching curriculum subjects:', error);
     return [];
@@ -1119,20 +1137,68 @@ export async function getCurriculumSubjectsDetailed(grade: string): Promise<{ su
     code: row.code || '',
     nameEn: row.name_en || '',
     department: row.department || '',
+    credits: row.credits ?? 3,
+    color: row.color || 'bg-violet-500',
+  }));
+}
+
+// بيجيب كل المواد بتاعة كل الصفوف مع تفاصيلها (لشاشة "المواد والمقررات" في الإعدادات)
+export async function getAllCurriculumSubjectsWithGrade(): Promise<{ id: string; grade: string; subject: string; code: string; nameEn: string; department: string; credits: number; color: string }[]> {
+  const { data, error } = await supabase.from('curriculum_subjects').select('id, grade, subject, code, name_en, department, credits, color').order('grade', { ascending: true });
+  if (error) {
+    console.error('Error fetching all curriculum subjects:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    grade: row.grade,
+    subject: row.subject,
+    code: row.code || '',
+    nameEn: row.name_en || '',
+    department: row.department || 'General',
+    credits: row.credits ?? 3,
+    color: row.color || 'bg-violet-500',
   }));
 }
 
 // بيضيف مادة جديدة لمنهج صف معيّن
-export async function addCurriculumSubject(input: { grade: string; subject: string; code?: string; nameEn?: string; department?: string }): Promise<boolean> {
+export async function addCurriculumSubject(input: { grade: string; subject: string; code?: string; nameEn?: string; department?: string; credits?: number; color?: string }): Promise<boolean> {
   const { error } = await supabase.from('curriculum_subjects').insert({
     grade: input.grade,
     subject: input.subject,
     code: input.code || null,
     name_en: input.nameEn || null,
     department: input.department || null,
+    credits: input.credits ?? 3,
+    color: input.color || 'bg-violet-500',
   });
   if (error) {
     console.error('Error adding curriculum subject:', error);
+    return false;
+  }
+  return true;
+}
+
+// بيعدّل بيانات مادة موجودة (عن طريق الـ id)
+export async function updateCurriculumSubjectById(id: string, input: { code?: string; nameEn?: string; department?: string; credits?: number; color?: string }): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_subjects').update({
+    code: input.code || null,
+    name_en: input.nameEn || null,
+    department: input.department || null,
+    credits: input.credits ?? 3,
+    color: input.color || 'bg-violet-500',
+  }).eq('id', id);
+  if (error) {
+    console.error('Error updating curriculum subject:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function removeCurriculumSubjectById(id: string): Promise<boolean> {
+  const { error } = await supabase.from('curriculum_subjects').delete().eq('id', id);
+  if (error) {
+    console.error('Error removing curriculum subject:', error);
     return false;
   }
   return true;
