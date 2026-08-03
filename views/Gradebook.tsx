@@ -907,61 +907,20 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                             </div>
                          </div>
                          
-                         <div className="relative w-full md:w-1/2">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف المستهدفة</label>
-                            <div 
-                              className="flex items-center justify-between p-2 bg-gray-50 border border-gray-200 rounded-xl cursor-default min-h-[46px]"
-                              onClick={() => setIsTargetGradesMenuOpen(!isTargetGradesMenuOpen)}
-                            >
-                              <div className="flex flex-wrap items-center gap-2">
-                                {selectedTargetGrades.length === 0 ? (
-                                  <span className="text-gray-500 text-sm px-2">اختر الصفوف...</span>
-                                ) : (
-                                  selectedTargetGrades.map(grade => (
-                                    <span key={grade} className="bg-violet-50 text-violet-700 border border-violet-200 px-2 pl-1 py-1 rounded-md text-xs font-bold flex items-center gap-1">
-                                      <span>{grade}</span>
-                                      <button 
-                                        className="hover:bg-violet-200 rounded-full p-0.5 transition-colors focus:outline-none"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedTargetGrades(selectedTargetGrades.filter(g => g !== grade));
-                                        }}
-                                      >
-                                        <XIcon size={12} />
-                                      </button>
-                                    </span>
-                                  ))
-                                )}
-                              </div>
-                              <ChevronDown size={18} className="text-gray-400 mr-2" />
+                         <div className="w-full md:w-1/2">
+                            <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف المستهدفة (محدّدة وقت الإنشاء)</label>
+                            <div className="flex items-center flex-wrap gap-2 p-3 bg-gray-50 border border-gray-200 rounded-xl min-h-[46px]">
+                              {(gradebooksData.find(g => g.id === selectedClassId) as any)?.gradesList?.length > 0 ? (
+                                (gradebooksData.find(g => g.id === selectedClassId) as any).gradesList.map((grade: string) => (
+                                  <span key={grade} className="bg-violet-50 text-violet-700 border border-violet-200 px-3 py-1 rounded-md text-xs font-bold">
+                                    {grade}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-gray-400 text-sm">مفيش صفوف مربوطة بالنظام ده</span>
+                              )}
                             </div>
-
-                            {isTargetGradesMenuOpen && (
-                              <>
-                                <div className="fixed inset-0 z-40" onClick={() => setIsTargetGradesMenuOpen(false)}></div>
-                                <div className="absolute z-50 w-full mt-2 bg-white border border-gray-100 rounded-xl shadow-xl overflow-hidden max-h-64 overflow-y-auto">
-                                  {k12Grades.map(grade => {
-                                    const isSelected = selectedTargetGrades.includes(grade);
-                                    return (
-                                      <div 
-                                        key={grade}
-                                        onClick={() => {
-                                          if (isSelected) {
-                                            setSelectedTargetGrades(selectedTargetGrades.filter(g => g !== grade));
-                                          } else {
-                                            setSelectedTargetGrades([...selectedTargetGrades, grade]);
-                                          }
-                                        }}
-                                        className={`px-4 py-3 text-sm cursor-pointer transition-colors flex justify-between items-center ${isSelected ? 'bg-violet-50 text-violet-800 font-bold' : 'font-medium text-gray-700 hover:bg-violet-50 hover:text-violet-700'}`}
-                                      >
-                                        {grade}
-                                        {isSelected && <Check size={16} className="text-violet-600" />}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </>
-                            )}
+                            <p className="text-xs text-gray-400 mt-1">لتغيير الصفوف، أنشئ نظام درجات جديد بدل ما تعدّل هنا.</p>
                          </div>
                       </div>
                    </div>
