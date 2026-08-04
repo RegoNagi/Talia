@@ -94,7 +94,8 @@ import {
   EyeOff,
   Bot,
   Menu,
-  Heart
+  Heart,
+  Archive
 } from 'lucide-react';
 
 interface SettingsProps {
@@ -210,6 +211,11 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   }, []);
   const [searchQuery, setSearchQuery] = useState('');
   const [courseGradeFilter, setCourseGradeFilter] = useState('');
+  const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const toggleSelectCourse = (id: string) => {
+    setSelectedCourseIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
   const [courseViewMode, setCourseViewMode] = useState<'BROWSE' | 'WIZARD'>('BROWSE');
   const [subjectCreationStep, setSubjectCreationStep] = useState(1);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
@@ -283,6 +289,20 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     setSelectedYearId(newYear.id);
     setAcademicYearViewMode('WIZARD');
     setCreationStep(1);
+  };
+
+  const handleArchiveYear = async (yearId: string) => {
+    const confirmed = await confirmDialog('متأكد إنك عايز تؤرشف العام الدراسي ده؟', 'أرشفة');
+    if (!confirmed) return;
+    setAcademicYears(prev => prev.map(y => y.id === yearId ? { ...y, status: 'Archived' } : y));
+    showToast('تم أرشفة العام الدراسي.', 'success');
+  };
+
+  const handleDeleteYear = async (yearId: string) => {
+    const confirmed = await confirmDialog('متأكد إنك عايز تمسح العام الدراسي ده؟ الإجراء ده مينفعش يترجع.', 'حذف');
+    if (!confirmed) return;
+    setAcademicYears(prev => prev.filter(y => y.id !== yearId));
+    showToast('تم حذف العام الدراسي.', 'success');
   };
 
   const handleAddTerm = async () => {
@@ -684,23 +704,48 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const handleAddCourse = async () => {
     if (!newCourse.code || !newCourse.nameEn || !newCourse.nameAr) return;
 
-    const ok = await addCurriculumSubject({
-      grade: newCourse.gradeLevel || 'الصف 9',
-      subject: newCourse.nameAr!,
-      code: newCourse.code,
-      nameEn: newCourse.nameEn,
-      department: newCourse.department || 'General',
-      credits: newCourse.credits || 3,
-      color: newCourse.color || 'bg-violet-500',
-    });
+    let ok: boolean;
+    if (editingCourseId) {
+      ok = await updateCurriculumSubjectById(editingCourseId, {
+        code: newCourse.code,
+        nameEn: newCourse.nameEn,
+        department: newCourse.department || 'General',
+        credits: newCourse.credits || 3,
+        color: newCourse.color || 'bg-violet-500',
+      });
+    } else {
+      ok = await addCurriculumSubject({
+        grade: newCourse.gradeLevel || 'الصف 9',
+        subject: newCourse.nameAr!,
+        code: newCourse.code,
+        nameEn: newCourse.nameEn,
+        department: newCourse.department || 'General',
+        credits: newCourse.credits || 3,
+        color: newCourse.color || 'bg-violet-500',
+      });
+    }
 
     if (ok) {
       refreshCourses();
-      showToast('تم إضافة المادة بنجاح.', 'success');
+      showToast(editingCourseId ? 'تم تعديل المادة بنجاح.' : 'تم إضافة المادة بنجاح.', 'success');
       setCourseViewMode('BROWSE');
+      setEditingCourseId(null);
       setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
     } else {
-      showToast('حصل خطأ أثناء إضافة المادة (ممكن تكون موجودة بالفعل لنفس الصف).', 'error');
+      showToast(editingCourseId ? 'حصل خطأ أثناء التعديل.' : 'حصل خطأ أثناء إضافة المادة (ممكن تكون موجودة بالفعل لنفس الصف).', 'error');
+    }
+  };
+
+  const handleBulkDeleteCourses = async () => {
+    const confirmed = await confirmDialog(`متأكد إنك عايز تمسح ${selectedCourseIds.length} مادة؟ الإجراء ده مينفعش يترجع.`, 'حذف الكل');
+    if (!confirmed) return;
+    const results = await Promise.all(selectedCourseIds.map(id => removeCurriculumSubjectById(id)));
+    refreshCourses();
+    setSelectedCourseIds([]);
+    if (results.every(Boolean)) {
+      showToast('تم حذف المواد المحددة.', 'success');
+    } else {
+      showToast('حصل خطأ في حذف بعض المواد.', 'error');
     }
   };
 
@@ -937,6 +982,8 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                 </div>
                 <Button 
                   onClick={() => {
+                    setEditingCourseId(null);
+                    setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
                     setCourseViewMode('WIZARD');
                     setSubjectCreationStep(1);
                   }} 
@@ -985,6 +1032,15 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
 
               {/* Course Content Area */}
               <div className="flex-1">
+                {selectedCourseIds.length > 0 && (
+                  <div className="mb-6 bg-violet-50 border border-violet-200 rounded-2xl px-5 py-3 flex items-center justify-between">
+                    <span className="text-sm font-bold text-violet-800">{selectedCourseIds.length} مادة محددة</span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setSelectedCourseIds([])} className="px-4 py-2 text-sm font-bold text-gray-600 hover:bg-white rounded-lg">إلغاء التحديد</button>
+                      <button onClick={handleBulkDeleteCourses} className="px-4 py-2 text-sm font-bold text-white bg-red-600 hover:bg-red-700 rounded-lg">حذف المحدد</button>
+                    </div>
+                  </div>
+                )}
                 {courseViewMode === 'BROWSE' ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fadeIn">
@@ -993,13 +1049,22 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                           <div className={`absolute top-0 left-0 w-full h-1.5 ${course.color || 'bg-violet-500'}`}></div>
                           
                           <div className="flex justify-between items-start mb-4">
-                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${course.color || 'bg-violet-500'}`}>
-                              <BookOpen size={24} />
+                            <div className="flex items-center gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selectedCourseIds.includes(course.id)}
+                                onChange={() => toggleSelectCourse(course.id)}
+                                className="mt-1"
+                              />
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${course.color || 'bg-violet-500'}`}>
+                                <BookOpen size={24} />
+                              </div>
                             </div>
                             <div className="flex gap-1">
                               <button 
                                 onClick={() => {
                                   setNewCourse(course);
+                                  setEditingCourseId(course.id);
                                   setCourseViewMode('WIZARD');
                                   setSubjectCreationStep(1);
                                 }}
@@ -1037,6 +1102,8 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
 
                       <button 
                         onClick={() => {
+                          setEditingCourseId(null);
+                          setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
                           setCourseViewMode('WIZARD');
                           setSubjectCreationStep(1);
                         }}
@@ -1353,6 +1420,25 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                       className="group bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl hover:border-violet-100 transition-all cursor-pointer relative overflow-hidden"
                     >
                       <div className="absolute top-0 right-0 w-32 h-32 bg-violet-50 rounded-full -mr-16 -mt-16 transition-all group-hover:scale-150 opacity-50" />
+                      
+                      <div className="absolute top-6 left-6 z-20 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {year.status !== 'Archived' && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleArchiveYear(year.id); }}
+                            className="w-8 h-8 rounded-lg bg-white border border-gray-100 text-gray-400 hover:text-amber-600 hover:border-amber-200 flex items-center justify-center transition-colors shadow-sm"
+                            title="أرشفة"
+                          >
+                            <Archive size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteYear(year.id); }}
+                          className="w-8 h-8 rounded-lg bg-white border border-gray-100 text-gray-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors shadow-sm"
+                          title="حذف"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                       
                       <div className="relative z-10 space-y-6">
                         <div className="flex justify-between items-start">
