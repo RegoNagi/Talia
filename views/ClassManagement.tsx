@@ -47,6 +47,7 @@ import {
   Search,
   Briefcase
 } from 'lucide-react';
+import { ArrowLeftRight } from 'lucide-react';
 
 const ACADEMIC_PLAN = [
   {
@@ -351,6 +352,9 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [selectedDate, setSelectedDate] = useState(new Date().toLocaleDateString('ar-EG', { weekday: 'long', month: 'short', day: 'numeric' }));
     const [todayAttendance, setTodayAttendance] = useState<Record<string, 'present' | 'absent'>>({});
+    const [transferringStudent, setTransferringStudent] = useState<Student | null>(null);
+    const [transferTargetClassId, setTransferTargetClassId] = useState<string | null>(null);
+    const [isTransferring, setIsTransferring] = useState(false);
 
     const enrolledStudents = realStudents.filter(s => classData.students.includes(s.id));
 
@@ -440,6 +444,43 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
         showToast('حصل خطأ أثناء إضافة الطالب للفصل.', 'error');
       }
     };
+
+    const otherSameGradeClasses = classes.filter(c => c.id !== classData.id && c.gradeLevel === classData.gradeLevel);
+
+    const handleTransferStudent = async (targetClassId: string) => {
+      if (!transferringStudent) return;
+      setIsTransferring(true);
+      const removeOk = await removeEnrollment(transferringStudent.id, classData.id);
+      const addOk = await addEnrollment(transferringStudent.id, targetClassId);
+      setIsTransferring(false);
+      if (removeOk && addOk) {
+        refreshClasses();
+        setTransferringStudent(null);
+        setTransferTargetClassId(null);
+        showToast('تم نقل الطالب للفصل الجديد.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء النقل.', 'error');
+      }
+    };
+
+    const handleSwapStudent = async (targetClassId: string, targetStudentId: string) => {
+      if (!transferringStudent) return;
+      setIsTransferring(true);
+      const r1 = await removeEnrollment(transferringStudent.id, classData.id);
+      const r2 = await removeEnrollment(targetStudentId, targetClassId);
+      const a1 = await addEnrollment(transferringStudent.id, targetClassId);
+      const a2 = await addEnrollment(targetStudentId, classData.id);
+      setIsTransferring(false);
+      if (r1 && r2 && a1 && a2) {
+        refreshClasses();
+        setTransferringStudent(null);
+        setTransferTargetClassId(null);
+        showToast('تم استبدال الطالبين بنجاح.', 'success');
+      } else {
+        showToast('حصل خطأ أثناء الاستبدال.', 'error');
+      }
+    };
+
 
     useEffect(() => {
       if (qrActive) {
@@ -723,13 +764,22 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                                  </td>
                                  <td className="p-3 text-right">
                                     {role === UserRole.ADMIN ? (
-                                      <button 
-                                        onClick={() => removeStudent(student.id)}
-                                        className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"
-                                        title="Remove from roster"
-                                      >
-                                         <XCircle size={18} />
-                                      </button>
+                                      <div className="flex items-center gap-1 justify-end">
+                                        <button
+                                          onClick={() => { setTransferringStudent(student); setTransferTargetClassId(null); }}
+                                          className="text-gray-400 hover:text-violet-600 p-2 rounded-full hover:bg-violet-50 transition-colors"
+                                          title="نقل لفصل تاني"
+                                        >
+                                           <ArrowLeftRight size={16} />
+                                        </button>
+                                        <button 
+                                          onClick={() => removeStudent(student.id)}
+                                          className="text-gray-400 hover:text-red-600 p-2 rounded-full hover:bg-red-50 transition-colors"
+                                          title="Remove from roster"
+                                        >
+                                           <XCircle size={18} />
+                                        </button>
+                                      </div>
                                     ) : (
                                       <button className="text-gray-400 hover:text-violet-600 p-2 rounded-full hover:bg-violet-50">
                                          <MoreVertical size={16} />
@@ -815,6 +865,79 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
              </div>
            </div>
          )}
+
+        {transferringStudent && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
+            <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-fadeIn max-h-[85vh] flex flex-col">
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">نقل {transferringStudent.name}</h3>
+                  <p className="text-xs text-gray-500 mt-1">اختار الفصل الجديد (من نفس الصف {classData.gradeLevel})</p>
+                </div>
+                <button onClick={() => { setTransferringStudent(null); setTransferTargetClassId(null); }} className="text-gray-400 hover:text-gray-700"><X size={22} /></button>
+              </div>
+
+              <div className="p-4 overflow-y-auto flex-1 space-y-2">
+                {otherSameGradeClasses.length === 0 && (
+                  <p className="text-center text-gray-400 py-8 text-sm">مفيش فصول تانية في نفس الصف.</p>
+                )}
+                {otherSameGradeClasses.map((c) => {
+                  const enrolled = c.students.length;
+                  const capacity = c.capacity ?? 25;
+                  const hasRoom = enrolled < capacity;
+                  const isTargetSelected = transferTargetClassId === c.id;
+                  return (
+                    <div key={c.id} className={`rounded-2xl border p-4 transition-all ${isTargetSelected ? 'border-violet-400 bg-violet-50/50' : 'border-gray-100'}`}>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-bold text-gray-900">{c.name}</p>
+                          <p className={`text-xs mt-0.5 font-bold ${hasRoom ? 'text-emerald-600' : 'text-red-500'}`}>
+                            {enrolled}/{capacity} طالب {hasRoom ? `(متاح ${capacity - enrolled} مكان)` : '(الفصل مكتمل)'}
+                          </p>
+                        </div>
+                        {hasRoom ? (
+                          <Button
+                            variant="primary"
+                            className="text-xs h-9 px-4"
+                            disabled={isTransferring}
+                            onClick={() => handleTransferStudent(c.id)}
+                          >
+                            نقل هنا
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="secondary"
+                            className="text-xs h-9 px-4"
+                            onClick={() => setTransferTargetClassId(isTargetSelected ? null : c.id)}
+                          >
+                            {isTargetSelected ? 'إلغاء الاستبدال' : 'استبدال بدل طالب'}
+                          </Button>
+                        )}
+                      </div>
+
+                      {isTargetSelected && !hasRoom && (
+                        <div className="mt-3 pt-3 border-t border-gray-100 space-y-1.5">
+                          <p className="text-[11px] text-gray-400 font-bold mb-2">اختار طالب من {c.name} يستبدل مكانه مع {transferringStudent.name}:</p>
+                          {realStudents.filter(s => c.students.includes(s.id)).map((s) => (
+                            <button
+                              key={s.id}
+                              disabled={isTransferring}
+                              onClick={() => handleSwapStudent(c.id, s.id)}
+                              className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gray-50 hover:bg-violet-50 hover:border-violet-200 border border-transparent transition-colors text-sm"
+                            >
+                              <span className="font-bold text-gray-800">{s.name}</span>
+                              <span className="text-violet-600 font-bold text-xs flex items-center gap-1"><ArrowLeftRight size={12} /> استبدال</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -826,6 +949,10 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     const [step, setStep] = useState(1);
     const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
+    const [isAutoDistributeOpen, setIsAutoDistributeOpen] = useState(false);
+    const [distributeGrade, setDistributeGrade] = useState('');
+    const [isDistributing, setIsDistributing] = useState(false);
+    const [distributeResult, setDistributeResult] = useState<{ assigned: number; skipped: number } | null>(null);
     
     // Form State
     const [classData, setClassData] = useState({
@@ -881,6 +1008,51 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
         return { ...prev, students: Array.from(newStudents) };
       });
     };
+
+    const handleAutoDistribute = async () => {
+      if (!distributeGrade) return;
+      setIsDistributing(true);
+      const gradeClasses = classes.filter(c => c.gradeLevel === distributeGrade);
+      const enrolledIds = new Set(gradeClasses.flatMap(c => c.students));
+      const unassignedStudents = realStudents.filter(s => s.grade === distributeGrade && !enrolledIds.has(s.id));
+
+      if (gradeClasses.length === 0 || unassignedStudents.length === 0) {
+        setIsDistributing(false);
+        setDistributeResult({ assigned: 0, skipped: unassignedStudents.length });
+        return;
+      }
+
+      // بنحسب الأماكن المتاحة في كل فصل، وبنوزّع الطلاب بالتساوي بينهم
+      const capacities = gradeClasses.map(c => ({ id: c.id, remaining: (c.capacity ?? 25) - c.students.length }));
+      let assigned = 0;
+      let skipped = 0;
+      let classIndex = 0;
+      for (const student of unassignedStudents) {
+        // بندوّر على أقرب فصل فيه مكان، بدايةً من اللي بعد آخر فصل اتاخد
+        let attempts = 0;
+        while (attempts < capacities.length && capacities[classIndex].remaining <= 0) {
+          classIndex = (classIndex + 1) % capacities.length;
+          attempts++;
+        }
+        if (capacities[classIndex].remaining <= 0) {
+          skipped++;
+          continue;
+        }
+        const ok = await addEnrollment(student.id, capacities[classIndex].id);
+        if (ok) {
+          assigned++;
+          capacities[classIndex].remaining--;
+        } else {
+          skipped++;
+        }
+        classIndex = (classIndex + 1) % capacities.length;
+      }
+
+      setIsDistributing(false);
+      setDistributeResult({ assigned, skipped });
+      refreshClasses();
+    };
+
     
     const deselectAllStudents = (filteredStudents: string[]) => {
       setClassData(prev => {
@@ -1326,6 +1498,11 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
             </div>
             <div className="flex items-center gap-3 w-full md:w-auto">
               {canManageClasses && (
+              <Button variant="secondary" onClick={() => { setIsAutoDistributeOpen(true); setDistributeResult(null); setDistributeGrade(selectedGrade !== 'كل الصفوف' ? selectedGrade : ''); }} className="shadow-sm border-slate-200">
+                 <Users size={18} className="mr-2" /> توزيع تلقائي
+              </Button>
+              )}
+              {canManageClasses && (
               <Button variant="secondary" onClick={() => setIsBulkImportModalOpen(true)} className="shadow-sm border-slate-200">
                  <FileSpreadsheet size={18} className="mr-2" /> استيراد جماعي
               </Button>
@@ -1412,6 +1589,63 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                <div className="p-8 bg-gray-50 border-t border-gray-100 flex gap-3">
                  <Button variant="secondary" className="flex-1" onClick={() => setIsBulkImportModalOpen(false)}>إلغاء</Button>
                  <Button className="bg-violet-600 text-white hover:bg-violet-700 shadow-md hover:shadow-lg flex-1" disabled>بدء الاستيراد</Button>
+               </div>
+             </div>
+           </div>
+         )}
+
+         {/* توزيع تلقائي Modal */}
+         {isAutoDistributeOpen && (
+           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
+             <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl animate-fadeIn">
+               <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                 <div>
+                   <h3 className="text-lg font-bold text-gray-900">توزيع تلقائي للطلاب</h3>
+                   <p className="text-xs text-gray-500 mt-1">هيوزّع كل الطلاب اللي مش متسكّنين في أي فصل، بالتساوي على فصول الصف اللي هتختاره (على حسب الأماكن المتاحة).</p>
+                 </div>
+                 <button onClick={() => setIsAutoDistributeOpen(false)} className="text-gray-400 hover:text-gray-700"><XCircle size={22} /></button>
+               </div>
+
+               <div className="p-6 space-y-4">
+                 {distributeResult ? (
+                   <div className="text-center py-6">
+                     <p className="text-2xl font-bold text-gray-900 mb-2">تم التوزيع</p>
+                     <p className="text-sm text-gray-500">
+                       اتسكّن {distributeResult.assigned} طالب
+                       {distributeResult.skipped > 0 ? ` — ${distributeResult.skipped} طالب متسكّنوش (الفصول مليانة أو حصل خطأ)` : ''}
+                     </p>
+                     <Button variant="primary" className="mt-6" onClick={() => { setIsAutoDistributeOpen(false); setDistributeResult(null); }}>تمام</Button>
+                   </div>
+                 ) : (
+                   <>
+                     <div>
+                       <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
+                       <select value={distributeGrade} onChange={(e) => setDistributeGrade(e.target.value)} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
+                         <option value="">اختار الصف...</option>
+                         {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
+                       </select>
+                     </div>
+                     {distributeGrade && (() => {
+                       const gradeClasses = classes.filter(c => c.gradeLevel === distributeGrade);
+                       const enrolledIds = new Set(gradeClasses.flatMap(c => c.students));
+                       const unassignedCount = realStudents.filter(s => s.grade === distributeGrade && !enrolledIds.has(s.id)).length;
+                       const totalRoom = gradeClasses.reduce((sum, c) => sum + Math.max(0, (c.capacity ?? 25) - c.students.length), 0);
+                       return (
+                         <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-600 space-y-1">
+                           <p>فصول الصف ده: <span className="font-bold text-gray-900">{gradeClasses.length}</span></p>
+                           <p>طلاب مش متسكّنين: <span className="font-bold text-gray-900">{unassignedCount}</span></p>
+                           <p>أماكن متاحة إجمالًا: <span className="font-bold text-gray-900">{totalRoom}</span></p>
+                         </div>
+                       );
+                     })()}
+                     <div className="flex gap-3 pt-2">
+                       <Button variant="secondary" className="flex-1" onClick={() => setIsAutoDistributeOpen(false)}>إلغاء</Button>
+                       <Button variant="primary" className="flex-1" disabled={!distributeGrade || isDistributing} onClick={handleAutoDistribute}>
+                         {isDistributing ? 'جاري التوزيع...' : 'ابدأ التوزيع'}
+                       </Button>
+                     </div>
+                   </>
+                 )}
                </div>
              </div>
            </div>

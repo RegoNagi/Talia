@@ -424,6 +424,7 @@ export interface ClassSection {
   academicYear: string;
   room: string;
   teacherId: string; // Homeroom teacher
+  capacity?: number;
   students: string[]; // List of Student IDs
   schedule: {
     day: string;

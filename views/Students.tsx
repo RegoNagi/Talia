@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import * as XLSX from 'xlsx';
 import { MOCK_PARENTS, CLASSES } from '../services/mockData';
 import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers, getAdmins, createAdmin, updateAdmin, deleteAdmin, bulkDeleteAdmins, getGradeLevels } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
@@ -661,6 +662,87 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
 
   // Modal States
   const [uploadModalType, setUploadModalType] = useState<'student' | 'teacher' | null>(null);
+  const [importRows, setImportRows] = useState<any[]>([]);
+  const [importFileName, setImportFileName] = useState('');
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResults, setImportResults] = useState<{ success: number; failed: number } | null>(null);
+
+  const closeImportModal = () => {
+    setUploadModalType(null);
+    setImportRows([]);
+    setImportFileName('');
+    setImportResults(null);
+  };
+
+  const handleImportFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setImportFileName(file.name);
+    setImportResults(null);
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: 'binary' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }) as any[];
+        setImportRows(rows);
+      } catch (err) {
+        showToast('حصل خطأ أثناء قراءة الملف. تأكد إنه ملف Excel أو CSV صحيح.', 'error');
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleDownloadTemplate = () => {
+    const headers = uploadModalType === 'student'
+      ? ['الاسم بالكامل', 'الصف', 'تاريخ الميلاد (YYYY-MM-DD)']
+      : ['الاسم بالكامل', 'التخصص', 'نوع التوظيف', 'نوع المعلم (Main/Assistant)'];
+    const ws = XLSX.utils.aoa_to_sheet([headers]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Template');
+    XLSX.writeFile(wb, uploadModalType === 'student' ? 'قالب_استيراد_طلاب.xlsx' : 'قالب_استيراد_معلمين.xlsx');
+  };
+
+  const handleStartImport = async () => {
+    if (importRows.length === 0) return;
+    setIsImporting(true);
+    let success = 0;
+    let failed = 0;
+    for (const row of importRows) {
+      if (uploadModalType === 'student') {
+        const name = row['الاسم بالكامل'] || row['الاسم'] || row['Name'] || '';
+        const grade = row['الصف'] || row['Grade'] || (gradeLevels[0] || '');
+        const dob = row['تاريخ الميلاد (YYYY-MM-DD)'] || row['تاريخ الميلاد'] || row['DOB'] || '';
+        if (!name.trim() || !grade.trim()) { failed++; continue; }
+        const id = await createStudent({ name: name.trim(), grade: grade.trim(), dob: dob.toString().trim() });
+        id ? success++ : failed++;
+      } else {
+        const name = row['الاسم بالكامل'] || row['الاسم'] || row['Name'] || '';
+        const specialization = row['التخصص'] || row['Specialization'] || '';
+        const employmentType = row['نوع التوظيف'] || row['Employment Type'] || 'Full-time';
+        const teacherType = (row['نوع المعلم (Main/Assistant)'] || row['نوع المعلم'] || 'Main').toString().trim() as 'Main' | 'Assistant';
+        if (!name.trim()) { failed++; continue; }
+        const id = await createTeacher({
+          name: name.trim(),
+          email: '',
+          hiringDate: new Date().toISOString().split('T')[0],
+          employmentType: employmentType.toString().trim(),
+          subjects: [],
+          allSubjects: false,
+          grades: [],
+          teacherType: teacherType === 'Assistant' ? 'Assistant' : 'Main',
+        });
+        id ? success++ : failed++;
+      }
+    }
+    setIsImporting(false);
+    setImportResults({ success, failed });
+    if (uploadModalType === 'student') refreshStudents(); else refreshTeachers();
+    showToast(`تم استيراد ${success} بنجاح${failed > 0 ? ` (وفشل ${failed})` : ''}.`, success > 0 ? 'success' : 'error');
+  };
+
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [isAddTeacherOpen, setIsAddTeacherOpen] = useState(false);
   const [isAddAdminOpen, setIsAddAdminOpen] = useState(false);
@@ -1380,27 +1462,60 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
        {/* 1. UPLOAD MODAL (Generic) */}
        {uploadModalType && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 p-4">
-             <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-fadeIn">
+             <div className="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl animate-fadeIn max-h-[85vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-6">
                    <h3 className="text-xl font-bold text-gray-900">{isRTL ? (uploadModalType === "student" ? "استيراد طلاب" : "استيراد معلمين") : `Bulk Import ${uploadModalType === "student" ? "Students" : "Teachers"}`}</h3>
-                   <button onClick={() => setUploadModalType(null)} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
-                </div>
-                
-                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center hover:bg-gray-50 transition-colors cursor-pointer mb-6">
-                   <FileSpreadsheet size={48} className="mx-auto text-green-600 mb-4" />
-                   <p className="font-bold text-gray-900">Click to upload or drag & drop</p>
-                   <p className="text-sm text-gray-500">CSV, Excel (max 10MB)</p>
+                   <button onClick={closeImportModal} className="text-gray-400 hover:text-gray-700"><X size={24}/></button>
                 </div>
 
-                <div className="flex justify-between items-center bg-violet-50 p-4 rounded-xl text-sm text-violet-800 mb-8">
-                   <span className="flex items-center gap-2"><Download size={16}/> Download Template</span>
-                   <button className="font-bold hover:underline">Get CSV</button>
-                </div>
+                {importResults ? (
+                  <div className="text-center py-8">
+                    <p className="text-2xl font-bold text-gray-900 mb-2">تم الاستيراد</p>
+                    <p className="text-sm text-gray-500">نجح: {importResults.success} — فشل: {importResults.failed}</p>
+                    <Button variant="primary" className="mt-6" onClick={closeImportModal}>تمام</Button>
+                  </div>
+                ) : (
+                  <>
+                    <label className="border-2 border-dashed border-gray-300 rounded-2xl p-10 text-center hover:bg-gray-50 transition-colors cursor-pointer mb-6 block">
+                       <FileSpreadsheet size={48} className="mx-auto text-green-600 mb-4" />
+                       <p className="font-bold text-gray-900">{importFileName || 'اضغط لرفع ملف Excel أو CSV'}</p>
+                       <p className="text-sm text-gray-500">CSV, Excel (max 10MB)</p>
+                       <input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleImportFileSelected} />
+                    </label>
 
-                <div className="flex gap-4">
-                   <Button variant="secondary" className="flex-1" onClick={() => setUploadModalType(null)}>{isRTL ? "إلغاء" : "Cancel"}</Button>
-                   <Button variant="primary" className="flex-1" onClick={() => setUploadModalType(null)}>Start Import</Button>
-                </div>
+                    {importRows.length > 0 && (
+                      <div className="mb-6 max-h-52 overflow-y-auto border border-gray-100 rounded-xl">
+                        <table className="w-full text-xs text-right">
+                          <thead className="bg-gray-50 sticky top-0">
+                            <tr>
+                              {Object.keys(importRows[0]).map((k) => <th key={k} className="p-2 font-bold text-gray-600">{k}</th>)}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {importRows.slice(0, 20).map((row, i) => (
+                              <tr key={i} className="border-t border-gray-50">
+                                {Object.keys(importRows[0]).map((k) => <td key={k} className="p-2 text-gray-700">{String(row[k])}</td>)}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <p className="text-xs text-gray-400 p-2">{importRows.length} صف جاهز للاستيراد{importRows.length > 20 ? ' (عرض أول 20)' : ''}</p>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between items-center bg-violet-50 p-4 rounded-xl text-sm text-violet-800 mb-8">
+                       <span className="flex items-center gap-2"><Download size={16}/> نزّل القالب الفاضي</span>
+                       <button onClick={handleDownloadTemplate} className="font-bold hover:underline">تحميل</button>
+                    </div>
+
+                    <div className="flex gap-4">
+                       <Button variant="secondary" className="flex-1" onClick={closeImportModal}>{isRTL ? "إلغاء" : "Cancel"}</Button>
+                       <Button variant="primary" className="flex-1" disabled={importRows.length === 0 || isImporting} onClick={handleStartImport}>
+                         {isImporting ? 'جاري الاستيراد...' : `استيراد ${importRows.length > 0 ? `(${importRows.length})` : ''}`}
+                       </Button>
+                    </div>
+                  </>
+                )}
              </div>
           </div>
        )}
