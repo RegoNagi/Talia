@@ -138,7 +138,7 @@ const SUBJECT_OPTIONS = ['رياضيات', 'علوم', 'لغة عربية', 'ل�
 // ده اللي بيمنع اهتزاز الخلفية اللي كان بيحصل قبل كده مع كل حرف بتكتبه.
 
 const AddStudentModal: React.FC<{ gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ gradeLevels, onClose, onSubmit }) => {
-  const [form, setForm] = useState({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: '' });
+  const [form, setForm] = useState({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: '', email: '', password: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -185,6 +185,14 @@ const AddStudentModal: React.FC<{ gradeLevels: string[]; onClose: () => void; on
                    <label className="block text-sm font-bold text-gray-700 mb-2">Date of Birth</label>
                    <input type="date" value={form.dob} onChange={(e) => setForm({...form, dob: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
                 </div>
+                <div className="md:col-span-2">
+                   <label className="block text-sm font-bold text-gray-700 mb-2">الإيميل (لتسجيل الدخول في Talia Learn)</label>
+                   <input type="email" placeholder="student@school.com" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
+                <div className="md:col-span-2">
+                   <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور</label>
+                   <input type="text" placeholder="اكتب كلمة مرور" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+                </div>
              </div>
           </div>
           <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
@@ -198,7 +206,7 @@ const AddStudentModal: React.FC<{ gradeLevels: string[]; onClose: () => void; on
 
 const AddTeacherModal: React.FC<{ gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
-    name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time',
+    name: '', email: '', password: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time',
     subjects: [] as string[], allSubjects: false, grades: [] as string[], teacherType: 'Main' as 'Main' | 'Assistant'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -232,6 +240,10 @@ const AddTeacherModal: React.FC<{ gradeLevels: string[]; onClose: () => void; on
              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
                 <input type="email" placeholder="teacher@school.edu" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">كلمة المرور (لتسجيل الدخول في Talia Learn)</label>
+                <input type="text" placeholder="اكتب كلمة مرور" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
              </div>
              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Hiring Date</label>
@@ -284,6 +296,7 @@ const EditTeacherModal: React.FC<{ teacher: any; gradeLevels: string[]; onClose:
   const [form, setForm] = useState({
     name: teacher.name || '',
     email: teacher.email || '',
+    password: '',
     type: teacher.employmentType || 'Full-time',
     subjects: teacher.subjects || [],
     allSubjects: (teacher.subjects || []).length >= SUBJECT_OPTIONS.length,
@@ -318,6 +331,10 @@ const EditTeacherModal: React.FC<{ teacher: any; gradeLevels: string[]; onClose:
              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">البريد الإلكتروني</label>
                 <input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">كلمة مرور جديدة (سيبها فاضية لو مش عايز تغيّرها)</label>
+                <input type="text" placeholder="•••••••" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
              </div>
              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">نوع التوظيف</label>
@@ -367,6 +384,8 @@ const EditStudentModal: React.FC<{ student: any; gradeLevels: string[]; onClose:
     grade: student.grade || 'الصف 10',
     dob: student.dob || '',
     status: student.status || 'Active',
+    email: student.email || '',
+    password: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -407,6 +426,14 @@ const EditStudentModal: React.FC<{ student: any; gradeLevels: string[]; onClose:
                   <option value="At Risk">في خطر</option>
                   <option value="Inactive">غير نشط</option>
                 </select>
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">الإيميل (لتسجيل الدخول في Talia Learn)</label>
+                <input type="email" value={form.email} onChange={(e) => setForm({...form, email: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
+             </div>
+             <div>
+                <label className="block text-sm font-bold text-gray-700 mb-2">كلمة مرور جديدة (سيبها فاضية لو مش عايز تغيّرها)</label>
+                <input type="text" placeholder="•••••••" value={form.password} onChange={(e) => setForm({...form, password: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500" />
              </div>
           </div>
           <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
@@ -697,8 +724,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
 
   const handleDownloadTemplate = () => {
     const headers = uploadModalType === 'student'
-      ? ['الاسم بالكامل', 'الصف', 'تاريخ الميلاد (YYYY-MM-DD)']
-      : ['الاسم بالكامل', 'التخصص', 'نوع التوظيف', 'نوع المعلم (Main/Assistant)'];
+      ? ['الاسم بالكامل', 'الصف', 'تاريخ الميلاد (YYYY-MM-DD)', 'الإيميل', 'كلمة المرور']
+      : ['الاسم بالكامل', 'التخصص', 'نوع التوظيف', 'نوع المعلم (Main/Assistant)', 'الإيميل', 'كلمة المرور'];
     const ws = XLSX.utils.aoa_to_sheet([headers]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Template');
@@ -715,18 +742,23 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         const name = row['الاسم بالكامل'] || row['الاسم'] || row['Name'] || '';
         const grade = row['الصف'] || row['Grade'] || (gradeLevels[0] || '');
         const dob = row['تاريخ الميلاد (YYYY-MM-DD)'] || row['تاريخ الميلاد'] || row['DOB'] || '';
+        const email = row['الإيميل'] || row['Email'] || '';
+        const password = row['كلمة المرور'] || row['Password'] || '';
         if (!name.trim() || !grade.trim()) { failed++; continue; }
-        const id = await createStudent({ name: name.trim(), grade: grade.trim(), dob: dob.toString().trim() });
+        const id = await createStudent({ name: name.trim(), grade: grade.trim(), dob: dob.toString().trim(), email: email.toString().trim(), password: password.toString().trim() });
         id ? success++ : failed++;
       } else {
         const name = row['الاسم بالكامل'] || row['الاسم'] || row['Name'] || '';
         const specialization = row['التخصص'] || row['Specialization'] || '';
         const employmentType = row['نوع التوظيف'] || row['Employment Type'] || 'Full-time';
         const teacherType = (row['نوع المعلم (Main/Assistant)'] || row['نوع المعلم'] || 'Main').toString().trim() as 'Main' | 'Assistant';
+        const email = row['الإيميل'] || row['Email'] || '';
+        const password = row['كلمة المرور'] || row['Password'] || '';
         if (!name.trim()) { failed++; continue; }
         const id = await createTeacher({
           name: name.trim(),
-          email: '',
+          email: email.toString().trim(),
+          password: password.toString().trim(),
           hiringDate: new Date().toISOString().split('T')[0],
           employmentType: employmentType.toString().trim(),
           subjects: [],
@@ -775,6 +807,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       userId: editingTeacher.userId,
       name: form.name,
       email: form.email,
+      password: form.password,
       employmentType: form.type,
       subjects: form.subjects,
       allSubjects: form.allSubjects,
@@ -825,6 +858,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       grade: form.grade,
       dob: form.dob,
       status: form.status,
+      email: form.email,
+      password: form.password,
     });
     if (ok) {
       refreshStudents();
@@ -872,7 +907,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
   const handleCreateStudent = async (form: any): Promise<boolean> => {
       const fullName = [form.firstName, form.secondName, form.thirdName, form.lastName].filter(Boolean).join(' ');
       if (!fullName.trim()) return false;
-      const id = await createStudent({ name: fullName, grade: form.grade, dob: form.dob });
+      const id = await createStudent({ name: fullName, grade: form.grade, dob: form.dob, email: form.email, password: form.password });
       if (id) {
         refreshStudents();
         showToast('تم إضافة الطالب بنجاح.', 'success');
@@ -887,6 +922,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       const id = await createTeacher({
         name: form.name,
         email: form.email,
+        password: form.password,
         hiringDate: form.hiringDate,
         employmentType: form.type,
         subjects: form.subjects,

@@ -30,10 +30,12 @@ export async function createStudent(input: {
   name: string;
   grade: string;
   dob: string;
+  email?: string;
+  password?: string;
 }): Promise<string | null> {
   const { data: userRow, error: userError } = await supabase
     .from('users')
-    .insert({ name: input.name, role: 'STUDENT' })
+    .insert({ name: input.name, role: 'STUDENT', email: input.email?.trim() ? input.email.trim() : null, password: input.password || null })
     .select('id')
     .single();
 
@@ -62,7 +64,7 @@ export async function createStudent(input: {
   return studentRow.id;
 }
 
-export async function getStudents(): Promise<(Student & { userId: string })[]> {
+export async function getStudents(): Promise<(Student & { userId: string; email: string })[]> {
   const { data, error } = await supabase
     .from('students')
     .select(`
@@ -73,7 +75,7 @@ export async function getStudents(): Promise<(Student & { userId: string })[]> {
       dob,
       enrollment_date,
       status,
-      users ( name )
+      users ( name, email )
     `);
 
   if (error) {
@@ -87,6 +89,7 @@ export async function getStudents(): Promise<(Student & { userId: string })[]> {
     id: row.id,
     userId: row.user_id,
     name: row.users?.name ?? 'بدون اسم',
+    email: row.users?.email ?? '',
     grade: row.grade ?? '',
     attendance: attendanceMap[row.id] ?? 0,
     performance: 0,
@@ -108,8 +111,13 @@ export async function updateStudent(input: {
   grade: string;
   dob: string;
   status: string;
+  email?: string;
+  password?: string;
 }): Promise<boolean> {
-  const { error: userError } = await supabase.from('users').update({ name: input.name }).eq('id', input.userId);
+  const userUpdate: any = { name: input.name };
+  if (input.email !== undefined) userUpdate.email = input.email?.trim() ? input.email.trim() : null;
+  if (input.password) userUpdate.password = input.password;
+  const { error: userError } = await supabase.from('users').update(userUpdate).eq('id', input.userId);
   if (userError) {
     console.error('Error updating student user:', userError);
     return false;
@@ -267,6 +275,7 @@ export async function getTeachersBySubject(subject: string): Promise<Teacher[]> 
 export async function createTeacher(input: {
   name: string;
   email: string;
+  password: string;
   hiringDate: string;
   employmentType: string;
   subjects: string[];
@@ -276,7 +285,7 @@ export async function createTeacher(input: {
 }): Promise<string | null> {
   const { data: userRow, error: userError } = await supabase
     .from('users')
-    .insert({ name: input.name, role: 'TEACHER', email: input.email?.trim() ? input.email.trim() : null })
+    .insert({ name: input.name, role: 'TEACHER', email: input.email?.trim() ? input.email.trim() : null, password: input.password || null })
     .select('id')
     .single();
 
@@ -331,10 +340,13 @@ export async function updateTeacher(input: {
   allSubjects: boolean;
   grades: string[];
   teacherType: 'Main' | 'Assistant';
+  password?: string;
 }): Promise<boolean> {
+  const userUpdate: any = { name: input.name, email: input.email?.trim() ? input.email.trim() : null };
+  if (input.password) userUpdate.password = input.password;
   const { error: userError } = await supabase
     .from('users')
-    .update({ name: input.name, email: input.email?.trim() ? input.email.trim() : null })
+    .update(userUpdate)
     .eq('id', input.userId);
 
   if (userError) {
