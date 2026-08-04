@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
-import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan, assignLessonPlanToSubject, getAllDistinctSubjects } from '../services/supabaseData';
+import { getAllCurriculumLessonPlans, deleteCurriculumLessonPlan, assignLessonPlanToSubject, getAllDistinctSubjects, getGradeLevels } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { 
@@ -28,9 +28,9 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
   const [plans, setPlans] = useState<{ id: string; title: string; content: string; grade: string; subject: string; createdAt: string; assigned: boolean }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [allSubjects, setAllSubjects] = useState<string[]>([]);
+  const [allGrades, setAllGrades] = useState<string[]>([]);
 
   const isRTL = language === Language.AR;
-  const GRADE_LEVELS_LIB = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
 
   const refreshPlans = () => {
     setIsLoading(true);
@@ -42,14 +42,15 @@ export const LessonPlanLibrary: React.FC<LessonPlanLibraryProps> = ({ language, 
 
   useEffect(() => {
     setIsLoading(true);
-    Promise.all([getAllCurriculumLessonPlans(), getAllDistinctSubjects()]).then(([plansData, subjectsData]) => {
+    Promise.all([getAllCurriculumLessonPlans(), getAllDistinctSubjects(), getGradeLevels()]).then(([plansData, subjectsData, gradesData]) => {
       setPlans(plansData);
       setAllSubjects(subjectsData);
+      setAllGrades(gradesData.map(g => g.name));
       setIsLoading(false);
     });
   }, []);
 
-  const grades = GRADE_LEVELS_LIB;
+  const grades = allGrades;
   const subjects = allSubjects;
 
   const filteredPlans = plans.filter(p =>

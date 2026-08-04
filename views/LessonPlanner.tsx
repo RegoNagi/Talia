@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Language } from '../types';
 import { generateLessonPlan } from '../services/geminiService';
-import { getCurriculumSubjectsDetailed, createCurriculumLessonPlan, updateCurriculumLessonPlan, getCurriculumLessonPlanById } from '../services/supabaseData';
+import { getCurriculumSubjectsDetailed, createCurriculumLessonPlan, updateCurriculumLessonPlan, getCurriculumLessonPlanById, getGradeLevels } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { 
   Sparkles, 
@@ -109,8 +109,8 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   const isReadOnly = editContext?.mode === 'view';
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
   const [isLoadingPlan, setIsLoadingPlan] = useState(false);
-  const GRADE_LEVELS_LP = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
-  const [grade, setGrade] = useState(GRADE_LEVELS_LP[0]);
+  const [gradeLevelsLP, setGradeLevelsLP] = useState<string[]>([]);
+  const [grade, setGrade] = useState('');
   const [subject, setSubject] = useState('');
   const [availableSubjects, setAvailableSubjects] = useState<string[]>([]);
   const [topic, setTopic] = useState('');
@@ -126,7 +126,18 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
   const isRTL = language === Language.AR;
 
   useEffect(() => {
+    getGradeLevels().then((grades) => {
+      const names = grades.map(g => g.name);
+      setGradeLevelsLP(names);
+      if (names.length > 0 && !editContext?.planId) {
+        setGrade((prev) => prev || names[0]);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     if (editContext?.planId) return; // أثناء تحميل خطة موجودة، بنتولّى تحديد المادة بنفسنا في الـ effect التاني
+    if (!grade) return;
     getCurriculumSubjectsDetailed(grade).then((subs) => {
       const names = subs.map(s => s.subject);
       setAvailableSubjects(names);
@@ -227,7 +238,7 @@ export const LessonPlanner: React.FC<LessonPlannerProps> = ({ language, permissi
     }
   };
 
-  const grades = GRADE_LEVELS_LP;
+  const grades = gradeLevelsLP;
   const subjects = availableSubjects;
 
   const getEmptyBlock = (type: string) => {

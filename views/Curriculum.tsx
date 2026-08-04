@@ -11,7 +11,8 @@ import {
   getCurriculumResources, addCurriculumResource, updateCurriculumResource, deleteCurriculumResource,
   getCurriculumLessonPlans, createCurriculumLessonPlan, deleteCurriculumLessonPlan,
   getCurriculumFolders, createCurriculumFolder, renameCurriculumFolder, deleteCurriculumFolder,
-  getAcademicYearSettings, saveAcademicYearSettings, saveEducationSystem,
+  getGradeLevels,
+  getAcademicYearSettings, saveEducationSystem,
   getLearningOutcomes, addLearningOutcome,
 } from '../services/supabaseData';
 import {
@@ -43,7 +44,7 @@ interface CurriculumProps {
   permissions?: string[];
 }
 
-const GRADE_LEVELS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+// (الصفوف الدراسية بقت بتتجاب حقيقي من قاعدة البيانات، مش قايمة ثابتة هنا)
 
 const formatArabicDate = (dateString: string) => {
   if (!dateString) return '';
@@ -259,13 +260,19 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
     });
   };
 
+  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
+
   useEffect(() => {
     setLoadingSubjects(true);
-    Promise.all(GRADE_LEVELS.map((g) => getCurriculumSubjectsDetailed(g))).then((results) => {
-      const map: Record<string, any[]> = {};
-      GRADE_LEVELS.forEach((g, i) => { map[g] = results[i]; });
-      setSubjectsByGrade(map);
-      setLoadingSubjects(false);
+    getGradeLevels().then((grades) => {
+      const names = grades.map(g => g.name);
+      setGradeLevels(names);
+      Promise.all(names.map((g) => getCurriculumSubjectsDetailed(g))).then((results) => {
+        const map: Record<string, any[]> = {};
+        names.forEach((g, i) => { map[g] = results[i]; });
+        setSubjectsByGrade(map);
+        setLoadingSubjects(false);
+      });
     });
   }, []);
 
@@ -493,7 +500,7 @@ export const Curriculum: React.FC<CurriculumProps> = ({ language, permissions = 
           <p className="text-xs text-gray-500 font-medium mt-1">{academicSettings?.academicYear || 'المراحل والصفوف'}</p>
         </div>
         <div className="flex-1 overflow-y-auto p-4 space-y-1">
-          {GRADE_LEVELS.map((grade) => (
+          {gradeLevels.map((grade) => (
             <div key={grade} className="mb-2">
               <div
                 onClick={() => { setSelectedGrade(grade); setSelectedSubject(null); }}

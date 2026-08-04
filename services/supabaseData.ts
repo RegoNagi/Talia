@@ -1426,34 +1426,129 @@ export async function deleteCurriculumLessonPlan(planId: string): Promise<boolea
 }
 
 // إعداد النظام التعليمي والعام الدراسي (إعداد واحد عام)
+// بيجيب بيانات العام الدراسي "النشط" فقط (ده اللي باقي النظام بيقرا منه: الجدول الزمني، إلخ)
 export async function getAcademicYearSettings(): Promise<{ system: string; startDate: string; endDate: string; academicYear: string } | null> {
-  const { data, error } = await supabase.from('academic_year_settings').select('system, start_date, end_date, academic_year').eq('id', 1).maybeSingle();
+  const { data, error } = await supabase.from('academic_years').select('name, system, start_date, end_date').eq('status', 'Active').maybeSingle();
   if (error || !data || !data.system) {
     return null;
   }
-  return { system: data.system, startDate: data.start_date, endDate: data.end_date, academicYear: data.academic_year || '' };
+  return { system: data.system, startDate: data.start_date, endDate: data.end_date, academicYear: data.name || '' };
 }
 
-export async function saveAcademicYearSettings(system: string, startDate: string, endDate: string, academicYear: string): Promise<boolean> {
-  const { data: existing } = await supabase.from('academic_year_settings').select('system, start_date, end_date, academic_year').eq('id', 1).maybeSingle();
-  const merged = {
-    id: 1,
-    system: system || existing?.system || null,
-    start_date: startDate || existing?.start_date || null,
-    end_date: endDate || existing?.end_date || null,
-    academic_year: academicYear || existing?.academic_year || null,
-  };
-  const { error } = await supabase.from('academic_year_settings').upsert(merged);
+// بيحفظ النظام التعليمي للعام النشط، أو بينشئ عام جديد نشط لو مفيش عام نشط أصلًا (أول استخدام)
+export async function saveEducationSystem(system: string): Promise<boolean> {
+  const { data: active } = await supabase.from('academic_years').select('id').eq('status', 'Active').maybeSingle();
+  if (active) {
+    const { error } = await supabase.from('academic_years').update({ system }).eq('id', active.id);
+    if (error) { console.error('Error saving education system:', error); return false; }
+    return true;
+  }
+  const { error } = await supabase.from('academic_years').insert({ name: 'العام الدراسي', system, status: 'Active' });
+  if (error) { console.error('Error creating active academic year:', error); return false; }
+  return true;
+}
+
+// كل الأعوام الدراسية (كل الحالات: مسودة / نشط / مؤرشف)
+export async function getAcademicYears(): Promise<{ id: string; name: string; system: string; startDate: string; endDate: string; status: string }[]> {
+  const { data, error } = await supabase.from('academic_years').select('id, name, system, start_date, end_date, status').order('created_at', { ascending: false });
   if (error) {
-    console.error('Error saving academic year settings:', error);
+    console.error('Error fetching academic years:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    name: row.name,
+    system: row.system || '',
+    startDate: row.start_date || '',
+    endDate: row.end_date || '',
+    status: row.status,
+  }));
+}
+
+export async function createAcademicYear(input: { name: string; system?: string }): Promise<string | null> {
+  const { data, error } = await supabase.from('academic_years').insert({ name: input.name, system: input.system || null, status: 'Draft' }).select('id').single();
+  if (error || !data) {
+    console.error('Error creating academic year:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function updateAcademicYear(id: string, input: { name?: string; startDate?: string; endDate?: string }): Promise<boolean> {
+  const patch: any = {};
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.startDate !== undefined) patch.start_date = input.startDate || null;
+  if (input.endDate !== undefined) patch.end_date = input.endDate || null;
+  const { error } = await supabase.from('academic_years').update(patch).eq('id', id);
+  if (error) {
+    console.error('Error updating academic year:', error);
     return false;
   }
   return true;
 }
 
-// بيحفظ النظام التعليمي بس (بدون التأثير على تواريخ العام الدراسي، اللي بتتحدد من الإعدادات)
-export async function saveEducationSystem(system: string): Promise<boolean> {
-  return saveAcademicYearSettings(system, '', '', '');
+// بيفعّل عام دراسي معيّن، وبيلغي تفعيل أي عام تاني كان نشط (عشان يفضل عام واحد بس نشط دايمًا)
+export async function activateAcademicYear(id: string): Promise<boolean> {
+  const { error: deactivateError } = await supabase.from('academic_years').update({ status: 'Archived' }).eq('status', 'Active').neq('id', id);
+  if (deactivateError) {
+    console.error('Error deactivating previous academic year:', deactivateError);
+    return false;
+  }
+  const { error } = await supabase.from('academic_years').update({ status: 'Active' }).eq('id', id);
+  if (error) {
+    console.error('Error activating academic year:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function archiveAcademicYear(id: string): Promise<boolean> {
+  const { error } = await supabase.from('academic_years').update({ status: 'Archived' }).eq('id', id);
+  if (error) {
+    console.error('Error archiving academic year:', error);
+    return false;
+  }
+  return true;
+}
+
+export async function deleteAcademicYear(id: string): Promise<boolean> {
+  const { error } = await supabase.from('academic_years').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting academic year:', error);
+    return false;
+  }
+  return true;
+}
+
+// ================== الصفوف الدراسية (Grade Levels) ==================
+
+export async function getGradeLevels(): Promise<{ id: string; name: string; displayOrder: number }[]> {
+  const { data, error } = await supabase.from('grade_levels').select('id, name, display_order').order('display_order', { ascending: true });
+  if (error) {
+    console.error('Error fetching grade levels:', error);
+    return [];
+  }
+  return (data || []).map((row: any) => ({ id: row.id, name: row.name, displayOrder: row.display_order }));
+}
+
+export async function addGradeLevel(name: string): Promise<string | null> {
+  const { data: existing } = await supabase.from('grade_levels').select('display_order').order('display_order', { ascending: false }).limit(1).maybeSingle();
+  const nextOrder = (existing?.display_order ?? 0) + 1;
+  const { data, error } = await supabase.from('grade_levels').insert({ name, display_order: nextOrder }).select('id').single();
+  if (error || !data) {
+    console.error('Error adding grade level:', error);
+    return null;
+  }
+  return data.id;
+}
+
+export async function deleteGradeLevel(id: string): Promise<boolean> {
+  const { error } = await supabase.from('grade_levels').delete().eq('id', id);
+  if (error) {
+    console.error('Error deleting grade level:', error);
+    return false;
+  }
+  return true;
 }
 
 // نواتج التعلم لمادة معيّنة في صف معيّن

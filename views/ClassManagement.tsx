@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserRole, Language, User, ClassSection, AttendanceSession, AttendanceStatus, CurriculumSystem, Student, Teacher } from '../types';
 import { MOCK_ATTENDANCE_SESSION } from '../services/mockData';
-import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection, updateClassSection, deleteClassSection, bulkDeleteClassSections, addEnrollment, removeEnrollment } from '../services/supabaseData';
+import { getStudents, getClassSections, getTeachers, createClassSection, saveAttendanceSession, getTodayAttendanceForSection, updateClassSection, deleteClassSection, bulkDeleteClassSections, addEnrollment, removeEnrollment, getGradeLevels } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/Button';
@@ -160,17 +160,18 @@ const AcademicPlanAccordion = () => {
   );
 };
 
-const GRADE_OPTIONS_CM = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+// (الصفوف الدراسية بقت بتتجاب حقيقي من قاعدة البيانات، مش قايمة ثابتة هنا)
 
 const EditClassModal: React.FC<{
   cls: ClassSection;
   teachers: Teacher[];
+  gradeLevels: string[];
   onClose: () => void;
   onSubmit: (data: any) => Promise<boolean>;
-}> = ({ cls, teachers, onClose, onSubmit }) => {
+}> = ({ cls, teachers, gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: cls.name || '',
-    gradeLevel: cls.gradeLevel || GRADE_OPTIONS_CM[0],
+    gradeLevel: cls.gradeLevel || gradeLevels[0] || '',
     teacherId: cls.teacherId || '',
     academicYear: cls.academicYear || '',
     capacity: (cls as any).capacity || 25,
@@ -200,7 +201,7 @@ const EditClassModal: React.FC<{
           <div>
             <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
             <select value={form.gradeLevel} onChange={(e) => setForm({...form, gradeLevel: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
-              {GRADE_OPTIONS_CM.map(g => <option key={g} value={g}>{g}</option>)}
+              {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
           <div>
@@ -240,9 +241,14 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
   const [classesLoading, setClassesLoading] = useState<boolean>(true);
   const [realStudents, setRealStudents] = useState<Student[]>([]);
   const [realTeachers, setRealTeachers] = useState<Teacher[]>([]);
+  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'attendance'>('name');
   const [isAddStudentModalOpen, setIsAddStudentModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    getGradeLevels().then((grades) => setGradeLevels(grades.map(g => g.name)));
+  }, []);
 
   const refreshClasses = () => {
     setClassesLoading(true);
@@ -941,7 +947,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                           value={classData.grade} 
                           onChange={e => setClassData({...classData, grade: e.target.value, students: []})}
                        >
-                          {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g}>{g}</option>)}
+                          {gradeLevels.map(g => <option key={g}>{g}</option>)}
                        </select>
                     </div>
                     <div>
@@ -1302,7 +1308,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
                   </button>
                   {isFilterOpen && (
                      <div className="absolute top-full right-0 mt-2 z-50 w-48 bg-white border border-slate-200 rounded-lg shadow-xl py-1">
-                        {['كل الصفوف', 'الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map((grade) => (
+                        {['كل الصفوف', ...gradeLevels].map((grade) => (
                            <div
                               key={grade}
                               onClick={() => {
@@ -1702,7 +1708,7 @@ export const ClassManagement: React.FC<ClassManagementProps> = ({ role, language
     <div dir="rtl" className="h-full w-full">
       {role === UserRole.ADMIN ? <AdminView /> : role === UserRole.STUDENT ? <StudentView /> : <TeacherView />}
       {editingClass && (
-        <EditClassModal cls={editingClass} teachers={realTeachers} onClose={() => setEditingClass(null)} onSubmit={handleUpdateClass} />
+        <EditClassModal cls={editingClass} teachers={realTeachers} gradeLevels={gradeLevels} onClose={() => setEditingClass(null)} onSubmit={handleUpdateClass} />
       )}
     </div>
   );

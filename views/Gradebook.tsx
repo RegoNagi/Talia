@@ -4,7 +4,7 @@ import { MOCK_GRADEBOOK } from '../services/mockData';
 import {
   getGradebookConfigs, createGradebookConfig, updateGradebookConfigStatus, updateGradebookConfig,
   getOrCreateDefaultTerm, getAssessments, createAssessment as createAssessmentSvc, deleteAssessment as deleteAssessmentSvc,
-  getGradeEntries, saveGradeEntries, getStudents, getClassSections, getCurriculumSubjects
+  getGradeEntries, saveGradeEntries, getStudents, getClassSections, getCurriculumSubjects, getGradeLevels
 } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
@@ -53,7 +53,7 @@ interface GradebookProps {
   permissions?: string[];
 }
 
-const GRADE_OPTIONS_GB = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+// (الصفوف الدراسية بقت بتتجاب حقيقي من قاعدة البيانات، مش قايمة ثابتة هنا)
 
 export const Gradebook: React.FC<GradebookProps> = ({ role, language, permissions = [] }) => {
   const canEnterGrades = permissions.length === 0 || permissions.includes('grades_enter');
@@ -259,7 +259,10 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
   const [subjectNameInput, setSubjectNameInput] = useState('');
   const [isTargetGradesMenuOpen, setIsTargetGradesMenuOpen] = useState(false);
 
-  const k12Grades = GRADE_OPTIONS_GB;
+  const [k12Grades, setK12Grades] = useState<string[]>([]);
+  useEffect(() => {
+    getGradeLevels().then((grades) => setK12Grades(grades.map(g => g.name)));
+  }, []);
 
   const isRTL = language === Language.AR;
   const currentTerm = config.terms.find(t => t.id === activeTermId);
@@ -445,7 +448,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
                   className="appearance-none w-full p-3 pr-10 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500 font-medium text-gray-800 transition-all cursor-pointer hover:bg-gray-100/50 text-sm"
                 >
                   <option value="All">جميع الصفوف</option>
-                  {['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'].map(g => <option key={g} value={g}>{g}</option>)}
+                  {k12Grades.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
                 <ChevronDown size={18} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
               </div>

@@ -5,6 +5,8 @@ import { confirmDialog } from '../components/ConfirmDialog';
 import { showToast } from '../components/Toast';
 import { saveAcademicYearSettings } from '../services/supabaseData';
 import { getAllCurriculumSubjectsWithGrade, addCurriculumSubject, updateCurriculumSubjectById, removeCurriculumSubjectById, getTerms, createTerm, updateTerm, deleteTerm } from '../services/supabaseData';
+import { getAcademicYears, createAcademicYear, updateAcademicYear, activateAcademicYear, archiveAcademicYear, deleteAcademicYear } from '../services/supabaseData';
+import { getGradeLevels, addGradeLevel, deleteGradeLevel } from '../services/supabaseData';
 import { 
   generateConflictFreeSchedule,
   simulateHolidayImpact,
@@ -227,38 +229,58 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const selectedSpace = spaces.find(s => s.id === selectedSpaceId) || spaces[0];
 
   // Academic Year State
-  const [academicYears, setAcademicYears] = useState<AcademicYearConfig[]>([
-    {
-      id: 'ay2025',
-      name: '2025/2026',
-      status: 'Archived',
-      instructionalDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
-      termDivision: 'Semesters',
-      terms: [
-        { id: 't1-25', nameEn: 'Term 1', nameAr: 'الفصل الدراسي الأول', startDate: '2025-09-01', endDate: '2026-01-15', gracePeriodDays: 5, status: 'Archived' },
-        { id: 't2-25', nameEn: 'Term 2', nameAr: 'الفصل الدراسي الثاني', startDate: '2026-01-25', endDate: '2026-06-15', gracePeriodDays: 5, status: 'Active' }
-      ],
-      holidays: [],
-      schoolEvents: [],
-      assignedCourses: []
-    },
-    {
-      id: 'ay2026',
-      name: '2026/2027',
-      status: 'Active',
-      instructionalDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
-      termDivision: 'Semesters',
-      terms: [
-        { id: 't1', nameEn: 'Term 1', nameAr: 'الفصل الدراسي الأول', startDate: '2026-09-01', endDate: '2027-01-15', gracePeriodDays: 5, status: 'Active' },
-        { id: 't2', nameEn: 'Term 2', nameAr: 'الفصل الدراسي الثاني', startDate: '2027-01-25', endDate: '2027-06-15', gracePeriodDays: 5, status: 'Active' }
-      ],
-      holidays: [],
-      schoolEvents: [],
-      assignedCourses: []
-    }
-  ]);
+  const [academicYears, setAcademicYears] = useState<AcademicYearConfig[]>([]);
+  const [academicYearsLoading, setAcademicYearsLoading] = useState(true);
+  const refreshAcademicYears = () => {
+    setAcademicYearsLoading(true);
+    getAcademicYears().then((years) => {
+      setAcademicYears(prev => years.map(y => ({
+        id: y.id,
+        name: y.name,
+        status: y.status as any,
+        instructionalDays: prev.find(p => p.id === y.id)?.instructionalDays || ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+        termDivision: 'Semesters',
+        terms: prev.find(p => p.id === y.id)?.terms || [],
+        holidays: [],
+        schoolEvents: [],
+        assignedCourses: [],
+      })));
+      setAcademicYearsLoading(false);
+    });
+  };
 
-  const [selectedYearId, setSelectedYearId] = useState('ay2026');
+  const [selectedYearId, setSelectedYearId] = useState('');
+
+  useEffect(() => {
+    setAcademicYearsLoading(true);
+    Promise.all([getAcademicYears(), getTerms()]).then(([years, realTerms]) => {
+      const mappedTerms = realTerms.map(t => ({
+        id: t.id,
+        nameEn: t.name,
+        nameAr: t.name,
+        startDate: t.startDate,
+        endDate: t.endDate,
+        gracePeriodDays: 5,
+        status: t.status,
+      }));
+      setAcademicYears(years.map(y => ({
+        id: y.id,
+        name: y.name,
+        status: y.status as any,
+        instructionalDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+        termDivision: 'Semesters',
+        terms: mappedTerms,
+        holidays: [],
+        schoolEvents: [],
+        assignedCourses: [],
+      })));
+      if (years.length > 0 && !selectedYearId) {
+        const active = years.find(y => y.status === 'Active');
+        setSelectedYearId(active?.id || years[0].id);
+      }
+      setAcademicYearsLoading(false);
+    });
+  }, []);
   const [academicYearViewMode, setAcademicYearViewMode] = useState<'BROWSE' | 'WIZARD' | 'DETAILS'>('BROWSE');
   const [creationStep, setCreationStep] = useState(1);
   
@@ -273,20 +295,14 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     }));
   };
 
-  const handleCreateAcademicYear = () => {
-    const newYear: AcademicYearConfig = {
-      id: `ay-${Date.now()}`,
-      name: '',
-      status: 'Draft',
-      instructionalDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
-      termDivision: 'Semesters',
-      terms: [],
-      holidays: [],
-      schoolEvents: [],
-      assignedCourses: []
-    };
-    setAcademicYears(prev => [...prev, newYear]);
-    setSelectedYearId(newYear.id);
+  const handleCreateAcademicYear = async () => {
+    const id = await createAcademicYear({ name: '' });
+    if (!id) {
+      showToast('حصل خطأ أثناء إنشاء العام الدراسي.', 'error');
+      return;
+    }
+    refreshAcademicYears();
+    setSelectedYearId(id);
     setAcademicYearViewMode('WIZARD');
     setCreationStep(1);
   };
@@ -294,15 +310,25 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const handleArchiveYear = async (yearId: string) => {
     const confirmed = await confirmDialog('متأكد إنك عايز تؤرشف العام الدراسي ده؟', 'أرشفة');
     if (!confirmed) return;
-    setAcademicYears(prev => prev.map(y => y.id === yearId ? { ...y, status: 'Archived' } : y));
-    showToast('تم أرشفة العام الدراسي.', 'success');
+    const ok = await archiveAcademicYear(yearId);
+    if (ok) {
+      refreshAcademicYears();
+      showToast('تم أرشفة العام الدراسي.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الأرشفة.', 'error');
+    }
   };
 
   const handleDeleteYear = async (yearId: string) => {
     const confirmed = await confirmDialog('متأكد إنك عايز تمسح العام الدراسي ده؟ الإجراء ده مينفعش يترجع.', 'حذف');
     if (!confirmed) return;
-    setAcademicYears(prev => prev.filter(y => y.id !== yearId));
-    showToast('تم حذف العام الدراسي.', 'success');
+    const ok = await deleteAcademicYear(yearId);
+    if (ok) {
+      refreshAcademicYears();
+      showToast('تم حذف العام الدراسي.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف.', 'error');
+    }
   };
 
   const handleAddTerm = async () => {
@@ -699,6 +725,39 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     gradeLevel: 'الصف 9'
   });
 
+  const [gradeLevels, setGradeLevels] = useState<{ id: string; name: string; displayOrder: number }[]>([]);
+  const [newGradeLevelName, setNewGradeLevelName] = useState('');
+  const [isAddingGradeLevel, setIsAddingGradeLevel] = useState(false);
+  const refreshGradeLevels = () => {
+    getGradeLevels().then(setGradeLevels);
+  };
+  useEffect(() => {
+    refreshGradeLevels();
+  }, []);
+  const handleAddGradeLevel = async () => {
+    if (!newGradeLevelName.trim()) return;
+    const id = await addGradeLevel(newGradeLevelName.trim());
+    if (id) {
+      refreshGradeLevels();
+      setNewGradeLevelName('');
+      setIsAddingGradeLevel(false);
+      showToast('تم إضافة الصف الدراسي بنجاح.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الإضافة (ممكن يكون الاسم موجود بالفعل).', 'error');
+    }
+  };
+  const handleDeleteGradeLevel = async (id: string) => {
+    const confirmed = await confirmDialog('متأكد إنك عايز تمسح الصف الدراسي ده؟ الفصول والمواد المرتبطة بيه هتفضل موجودة لكن مش هتظهر تحت صف حالي.', 'حذف');
+    if (!confirmed) return;
+    const ok = await deleteGradeLevel(id);
+    if (ok) {
+      refreshGradeLevels();
+      showToast('تم حذف الصف الدراسي.', 'success');
+    } else {
+      showToast('حصل خطأ أثناء الحذف.', 'error');
+    }
+  };
+
   const isRTL = language === Language.AR;
 
   const handleAddCourse = async () => {
@@ -993,6 +1052,47 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                 </Button>
               </div>
 
+              {/* Grade Levels Manager */}
+              <div className="mb-8 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h4 className="font-bold text-gray-900">{isRTL ? 'الصفوف الدراسية' : 'Grade Levels'}</h4>
+                    <p className="text-xs text-gray-400 mt-0.5">{isRTL ? 'الصفوف اللي بتستخدمها المدرسة في كل مكان بالنظام' : 'The grades your school uses throughout the system'}</p>
+                  </div>
+                  <button onClick={() => setIsAddingGradeLevel(true)} className="text-sm font-bold text-violet-600 hover:bg-violet-50 px-3 py-1.5 rounded-lg flex items-center gap-1">
+                    <Plus size={16} /> {isRTL ? 'إضافة صف' : 'Add Grade'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {gradeLevels.map(g => (
+                    <span key={g.id} className="flex items-center gap-2 bg-gray-50 border border-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm font-bold">
+                      {g.name}
+                      <button onClick={() => handleDeleteGradeLevel(g.id)} className="text-gray-300 hover:text-red-500">
+                        <X size={13} />
+                      </button>
+                    </span>
+                  ))}
+                  {isAddingGradeLevel && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={newGradeLevelName}
+                        onChange={(e) => setNewGradeLevelName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleAddGradeLevel()}
+                        placeholder={isRTL ? 'مثال: الصف 13' : 'e.g. Grade 13'}
+                        className="bg-gray-50 border border-violet-200 rounded-full px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <button onClick={handleAddGradeLevel} className="text-xs font-bold text-violet-600">{isRTL ? 'إضافة' : 'Add'}</button>
+                      <button onClick={() => { setIsAddingGradeLevel(false); setNewGradeLevelName(''); }} className="text-xs text-gray-400">{isRTL ? 'إلغاء' : 'Cancel'}</button>
+                    </div>
+                  )}
+                  {gradeLevels.length === 0 && !isAddingGradeLevel && (
+                    <p className="text-sm text-gray-400">{isRTL ? 'مفيش صفوف دراسية متعملة لسه.' : 'No grade levels yet.'}</p>
+                  )}
+                </div>
+              </div>
+
               {/* Toolbar */}
               <div className="mb-8 flex flex-col xl:flex-row gap-4">
                 <div className="flex flex-1 gap-3 flex-col lg:flex-row">
@@ -1008,10 +1108,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                   </div>
                   <select value={courseGradeFilter} onChange={(e) => setCourseGradeFilter(e.target.value)} className="flex-1 bg-white border border-slate-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-none text-gray-600 outline-none">
                     <option value="">{isRTL ? 'كل الصفوف' : 'All Grades'}</option>
-                    <option value="الصف 9">{isRTL ? 'الصف 9' : 'Grade 9'}</option>
-                    <option value="الصف 10">{isRTL ? 'الصف 10' : 'Grade 10'}</option>
-                    <option value="الصف 11">{isRTL ? 'الصف 11' : 'Grade 11'}</option>
-                    <option value="الصف 12">{isRTL ? 'الصف 12' : 'Grade 12'}</option>
+                    {gradeLevels.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
                   </select>
                   <select className="flex-1 bg-white border border-slate-100 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-violet-500 shadow-none text-gray-600 outline-none">
                     <option value="">{isRTL ? 'الفصل الدراسي' : 'All Terms'}</option>
@@ -1238,10 +1335,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                   onChange={(e) => setNewCourse({...newCourse, gradeLevel: e.target.value})}
                                   className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl outline-none focus:ring-2 focus:ring-violet-500 transition-all appearance-none"
                                 >
-                                  <option value="الصف 9">الصف 9</option>
-                                  <option value="الصف 10">الصف 10</option>
-                                  <option value="الصف 11">الصف 11</option>
-                                  <option value="الصف 12">الصف 12</option>
+                                  {gradeLevels.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
                                 </select>
                               </div>
                               <div className="space-y-2 md:col-span-2">
@@ -1682,7 +1776,10 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                             <input 
                               type="text" 
                               value={academicYear.name}
-                              onChange={(e) => setAcademicYear({...academicYear, name: e.target.value})}
+                              onChange={(e) => {
+                                setAcademicYear({...academicYear, name: e.target.value});
+                                updateAcademicYear(academicYear.id, { name: e.target.value });
+                              }}
                               className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-violet-500"
                               placeholder="e.g. 2026/2027"
                             />
@@ -2077,19 +2174,24 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                               </p>
                               <Button 
                                 onClick={async () => {
-                                  setAcademicYearViewMode('BROWSE');
-                                  setAcademicYear({ ...academicYear, status: 'Active' });
+                                  let overallStart = '';
+                                  let overallEnd = '';
                                   if (academicYear.terms.length > 0) {
                                     const starts = academicYear.terms.map(t => new Date(t.startDate).getTime()).filter(n => !isNaN(n));
                                     const ends = academicYear.terms.map(t => new Date(t.endDate).getTime()).filter(n => !isNaN(n));
                                     if (starts.length > 0 && ends.length > 0) {
-                                      const overallStart = new Date(Math.min(...starts)).toISOString().split('T')[0];
-                                      const overallEnd = new Date(Math.max(...ends)).toISOString().split('T')[0];
-                                      const ok = await saveAcademicYearSettings('', overallStart, overallEnd, academicYear.name);
-                                      if (ok) {
-                                        showToast('تم تفعيل العام الدراسي، وهيبقى متاح تلقائيًا في المنهج الدراسي.', 'success');
-                                      }
+                                      overallStart = new Date(Math.min(...starts)).toISOString().split('T')[0];
+                                      overallEnd = new Date(Math.max(...ends)).toISOString().split('T')[0];
                                     }
+                                  }
+                                  await updateAcademicYear(academicYear.id, { name: academicYear.name, startDate: overallStart, endDate: overallEnd });
+                                  const ok = await activateAcademicYear(academicYear.id);
+                                  if (ok) {
+                                    refreshAcademicYears();
+                                    setAcademicYearViewMode('BROWSE');
+                                    showToast('تم تفعيل العام الدراسي (وأي عام تاني كان نشط رجع مؤرشف تلقائيًا)، وهيبقى متاح في المنهج الدراسي.', 'success');
+                                  } else {
+                                    showToast('حصل خطأ أثناء التفعيل.', 'error');
                                   }
                                 }}
                                 className="w-full bg-white text-violet-600 hover:bg-violet-50 h-12 rounded-2xl font-bold"

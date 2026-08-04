@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MOCK_PARENTS, CLASSES } from '../services/mockData';
-import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers, getAdmins, createAdmin, updateAdmin, deleteAdmin, bulkDeleteAdmins } from '../services/supabaseData';
+import { getStudents, getTeachers, createTeacher, createStudent, updateTeacher, deleteTeacher, updateStudent, deleteStudent, bulkDeleteStudents, bulkDeleteTeachers, getAdmins, createAdmin, updateAdmin, deleteAdmin, bulkDeleteAdmins, getGradeLevels } from '../services/supabaseData';
 import { showToast } from '../components/Toast';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { Language, Student, Teacher, Admin, Parent, UserRole } from '../types';
@@ -129,14 +129,14 @@ const ADMIN_TEMPLATES: Record<string, string[]> = {
     'IT Support': ['sys_settings', 'sys_logs', 'users_reset', 'users_view']
 };
 
-const GRADE_OPTIONS = ['الصف 9', 'الصف 10', 'الصف 11', 'الصف 12'];
+// (الصفوف الدراسية بقت بتتجاب حقيقي من قاعدة البيانات، مش قايمة ثابتة هنا)
 const SUBJECT_OPTIONS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
 
 // ملاحظة مهمة: المودالات دي معمولة كـ component مستقل بحالته الخاصة (مش state جوه الصفحة الرئيسية)،
 // عشان لما تكتب جوه المودال، بس المودال نفسه يعيد الرسم — مش الصفحة اللي وراه كلها.
 // ده اللي بيمنع اهتزاز الخلفية اللي كان بيحصل قبل كده مع كل حرف بتكتبه.
 
-const AddStudentModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
+const AddStudentModal: React.FC<{ gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({ firstName: '', secondName: '', thirdName: '', lastName: '', grade: 'الصف 10', dob: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -177,7 +177,7 @@ const AddStudentModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
                 <div className="md:col-span-2">
                    <label className="block text-sm font-bold text-gray-700 mb-2">Grade Level</label>
                    <select value={form.grade} onChange={(e) => setForm({...form, grade: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
-                     {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                     {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
                    </select>
                 </div>
                 <div className="md:col-span-2">
@@ -195,7 +195,7 @@ const AddStudentModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
   );
 };
 
-const AddTeacherModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ onClose, onSubmit }) => {
+const AddTeacherModal: React.FC<{ gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: '', email: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time',
     subjects: [] as string[], allSubjects: false, grades: [] as string[], teacherType: 'Main' as 'Main' | 'Assistant'
@@ -264,7 +264,7 @@ const AddTeacherModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
              <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف اللي بيدرّس فيها (تقدر تختار أكتر من صف)</label>
                 <div className="flex flex-wrap gap-2">
-                  {GRADE_OPTIONS.map(grade => (
+                  {gradeLevels.map(grade => (
                     <button type="button" key={grade} onClick={() => toggleGrade(grade)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${form.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{grade}</button>
                   ))}
                 </div>
@@ -279,7 +279,7 @@ const AddTeacherModal: React.FC<{ onClose: () => void; onSubmit: (data: any) => 
   );
 };
 
-const EditTeacherModal: React.FC<{ teacher: any; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ teacher, onClose, onSubmit }) => {
+const EditTeacherModal: React.FC<{ teacher: any; gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ teacher, gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: teacher.name || '',
     email: teacher.email || '',
@@ -345,7 +345,7 @@ const EditTeacherModal: React.FC<{ teacher: any; onClose: () => void; onSubmit: 
              <div className="md:col-span-2">
                 <label className="block text-sm font-bold text-gray-700 mb-2">الصفوف اللي بيدرّس فيها</label>
                 <div className="flex flex-wrap gap-2">
-                  {GRADE_OPTIONS.map(grade => (
+                  {gradeLevels.map(grade => (
                     <button type="button" key={grade} onClick={() => toggleGrade(grade)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${form.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{grade}</button>
                   ))}
                 </div>
@@ -360,7 +360,7 @@ const EditTeacherModal: React.FC<{ teacher: any; onClose: () => void; onSubmit: 
   );
 };
 
-const EditStudentModal: React.FC<{ student: any; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ student, onClose, onSubmit }) => {
+const EditStudentModal: React.FC<{ student: any; gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ student, gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: student.name || '',
     grade: student.grade || 'الصف 10',
@@ -392,7 +392,7 @@ const EditStudentModal: React.FC<{ student: any; onClose: () => void; onSubmit: 
              <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">الصف الدراسي</label>
                 <select value={form.grade} onChange={(e) => setForm({...form, grade: e.target.value})} className="w-full border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-violet-500 bg-white">
-                  {GRADE_OPTIONS.map(g => <option key={g} value={g}>{g}</option>)}
+                  {gradeLevels.map(g => <option key={g} value={g}>{g}</option>)}
                 </select>
              </div>
              <div>
@@ -642,14 +642,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
     });
   };
 
+  const [gradeLevels, setGradeLevels] = useState<string[]>([]);
+
   useEffect(() => {
     setStudentsLoading(true);
     setTeachersLoading(true);
     setAdminsLoading(true);
-    Promise.all([getStudents(), getTeachers(), getAdmins()]).then(([studentsData, teachersData, adminsData]) => {
+    Promise.all([getStudents(), getTeachers(), getAdmins(), getGradeLevels()]).then(([studentsData, teachersData, adminsData, gradesData]) => {
       setStudentsList(studentsData);
       setTeachersList(teachersData);
       setAdminsList(adminsData);
+      setGradeLevels(gradesData.map(g => g.name));
       setStudentsLoading(false);
       setTeachersLoading(false);
       setAdminsLoading(false);
@@ -1404,22 +1407,22 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
 
        {/* 2. ADD STUDENT MODAL */}
        {isAddStudentOpen && (
-         <AddStudentModal onClose={() => setIsAddStudentOpen(false)} onSubmit={handleCreateStudent} />
+         <AddStudentModal gradeLevels={gradeLevels} onClose={() => setIsAddStudentOpen(false)} onSubmit={handleCreateStudent} />
        )}
 
        {/* 3. ADD TEACHER MODAL */}
        {isAddTeacherOpen && (
-         <AddTeacherModal onClose={() => setIsAddTeacherOpen(false)} onSubmit={handleCreateTeacher} />
+         <AddTeacherModal gradeLevels={gradeLevels} onClose={() => setIsAddTeacherOpen(false)} onSubmit={handleCreateTeacher} />
        )}
 
        {/* EDIT TEACHER MODAL */}
        {editingTeacher && (
-         <EditTeacherModal teacher={editingTeacher} onClose={() => setEditingTeacher(null)} onSubmit={handleUpdateTeacher} />
+         <EditTeacherModal teacher={editingTeacher} gradeLevels={gradeLevels} onClose={() => setEditingTeacher(null)} onSubmit={handleUpdateTeacher} />
        )}
 
        {/* EDIT STUDENT MODAL */}
        {editingStudent && (
-         <EditStudentModal student={editingStudent} onClose={() => setEditingStudent(null)} onSubmit={handleUpdateStudent} />
+         <EditStudentModal student={editingStudent} gradeLevels={gradeLevels} onClose={() => setEditingStudent(null)} onSubmit={handleUpdateStudent} />
        )}
 
 
