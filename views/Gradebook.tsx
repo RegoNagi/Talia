@@ -260,7 +260,7 @@ export const Gradebook: React.FC<GradebookProps> = ({ role, language, permission
   const [isTargetGradesMenuOpen, setIsTargetGradesMenuOpen] = useState(false);
 
   const [k12Grades, setK12Grades] = useState<string[]>([]);
-  useEffect(() => {
+  React.useEffect(() => {
     getGradeLevels().then((grades) => setK12Grades(grades.map(g => g.name)));
   }, []);
 

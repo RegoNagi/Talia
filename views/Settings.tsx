@@ -282,7 +282,11 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const [academicYearViewMode, setAcademicYearViewMode] = useState<'BROWSE' | 'WIZARD' | 'DETAILS'>('BROWSE');
   const [creationStep, setCreationStep] = useState(1);
   
-  const academicYear = academicYears.find(y => y.id === selectedYearId) || academicYears[0];
+  const academicYear = academicYears.find(y => y.id === selectedYearId) || academicYears[0] || {
+    id: '', name: '', status: 'Draft' as any,
+    instructionalDays: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday'],
+    termDivision: 'Semesters' as any, terms: [], holidays: [], schoolEvents: [], assignedCourses: [],
+  };
 
   const setAcademicYear = (update: any) => {
     setAcademicYears(prev => prev.map(y => {
