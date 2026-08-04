@@ -214,7 +214,6 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [courseGradeFilter, setCourseGradeFilter] = useState('');
   const [selectedCourseIds, setSelectedCourseIds] = useState<string[]>([]);
-  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const toggleSelectCourse = (id: string) => {
     setSelectedCourseIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
