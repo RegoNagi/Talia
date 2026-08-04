@@ -3,7 +3,6 @@ import { Language, UserRole, SettingsTab, Course, AcademicYearConfig, Holiday, T
 import { Button } from '../components/Button';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { showToast } from '../components/Toast';
-import { saveAcademicYearSettings } from '../services/supabaseData';
 import { getAllCurriculumSubjectsWithGrade, addCurriculumSubject, updateCurriculumSubjectById, removeCurriculumSubjectById, getTerms, createTerm, updateTerm, deleteTerm } from '../services/supabaseData';
 import { getAcademicYears, createAcademicYear, updateAcademicYear, activateAcademicYear, archiveAcademicYear, deleteAcademicYear } from '../services/supabaseData';
 import { getGradeLevels, addGradeLevel, deleteGradeLevel } from '../services/supabaseData';
