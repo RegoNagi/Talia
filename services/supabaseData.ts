@@ -201,7 +201,7 @@ export async function getClassSections(): Promise<ClassSection[]> {
 // بيجيب المدرسين الحقيقيين (مع بياناتهم من جدول users)
 const ALL_SUBJECTS = ['رياضيات', 'علوم', 'لغة عربية', 'لغة إنجليزية', 'تاريخ', 'فنون'];
 
-export async function getTeachers(): Promise<(Teacher & { userId: string; grades: string[]; subjects: string[]; teacherType: 'Main' | 'Assistant' })[]> {
+export async function getTeachers(): Promise<(Teacher & { userId: string; grades: string[]; subjects: string[]; teacherType: 'Main' | 'Assistant'; canUseQuestionBank: boolean })[]> {
   const { data, error } = await supabase
     .from('teachers')
     .select(`
@@ -210,6 +210,7 @@ export async function getTeachers(): Promise<(Teacher & { userId: string; grades
       specialization,
       employment_type,
       teacher_type,
+      can_add_to_question_bank,
       users ( name, email ),
       teacher_grades ( grade ),
       teacher_subjects ( subject )
@@ -236,6 +237,7 @@ export async function getTeachers(): Promise<(Teacher & { userId: string; grades
     grades: (row.teacher_grades || []).map((g: any) => g.grade),
     subjects: (row.teacher_subjects || []).map((s: any) => s.subject),
     teacherType: row.teacher_type ?? 'Main',
+    canUseQuestionBank: row.can_add_to_question_bank ?? false,
   }));
 }
 
@@ -282,6 +284,7 @@ export async function createTeacher(input: {
   allSubjects: boolean;
   grades: string[];
   teacherType: 'Main' | 'Assistant';
+  canUseQuestionBank?: boolean;
 }): Promise<string | null> {
   const { data: userRow, error: userError } = await supabase
     .from('users')
@@ -305,6 +308,7 @@ export async function createTeacher(input: {
       employment_type: input.employmentType,
       hiring_date: input.hiringDate || null,
       teacher_type: input.teacherType,
+      can_add_to_question_bank: input.canUseQuestionBank || false,
     })
     .select('id')
     .single();
@@ -341,6 +345,7 @@ export async function updateTeacher(input: {
   grades: string[];
   teacherType: 'Main' | 'Assistant';
   password?: string;
+  canUseQuestionBank?: boolean;
 }): Promise<boolean> {
   const userUpdate: any = { name: input.name, email: input.email?.trim() ? input.email.trim() : null };
   if (input.password) userUpdate.password = input.password;
@@ -363,6 +368,7 @@ export async function updateTeacher(input: {
       specialization: specializationLabel,
       employment_type: input.employmentType,
       teacher_type: input.teacherType,
+      can_add_to_question_bank: input.canUseQuestionBank || false,
     })
     .eq('id', input.teacherId);
 

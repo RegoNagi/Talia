@@ -111,6 +111,14 @@ const PERMISSION_GROUPS = [
       ]
    },
    {
+      category: 'بنك الأسئلة (Question Bank)',
+      perms: [
+         { id: 'qb_manage', label: 'إدارة بنك الأسئلة (إضافة/تعديل/حذف/تنظيم)' },
+         { id: 'qb_approve', label: 'مراجعة واعتماد الأسئلة المقترحة' },
+         { id: 'qb_analytics', label: 'عرض تحليلات بنك الأسئلة' },
+      ]
+   },
+   {
       category: 'النظام (System)',
       perms: [
          { id: 'sys_settings', label: 'الإعدادات العامة' },
@@ -127,7 +135,8 @@ const ADMIN_TEMPLATES: Record<string, string[]> = {
     'مشرف مرحلة': ['classes_view', 'attendance_view', 'attendance_reports', 'grades_view', 'grades_supervise', 'grades_reports', 'dashboard_view'],
     'Registrar': ['users_view', 'users_create', 'users_reset', 'classes_view', 'classes_manage', 'attendance_view', 'attendance_reports', 'dashboard_view'],
     'Finance Officer': ['fin_view', 'fin_manage', 'dashboard_view', 'dashboard_financial_widgets'],
-    'IT Support': ['sys_settings', 'sys_logs', 'users_reset', 'users_view']
+    'IT Support': ['sys_settings', 'sys_logs', 'users_reset', 'users_view'],
+    'مشرف بنك الأسئلة': ['qb_manage', 'qb_approve', 'qb_analytics', 'dashboard_view']
 };
 
 // (الصفوف الدراسية بقت بتتجاب حقيقي من قاعدة البيانات، مش قايمة ثابتة هنا)
@@ -207,7 +216,8 @@ const AddStudentModal: React.FC<{ gradeLevels: string[]; onClose: () => void; on
 const AddTeacherModal: React.FC<{ gradeLevels: string[]; onClose: () => void; onSubmit: (data: any) => Promise<boolean> }> = ({ gradeLevels, onClose, onSubmit }) => {
   const [form, setForm] = useState({
     name: '', email: '', password: '', hiringDate: new Date().toISOString().split('T')[0], type: 'Full-time',
-    subjects: [] as string[], allSubjects: false, grades: [] as string[], teacherType: 'Main' as 'Main' | 'Assistant'
+    subjects: [] as string[], allSubjects: false, grades: [] as string[], teacherType: 'Main' as 'Main' | 'Assistant',
+    canUseQuestionBank: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -282,6 +292,12 @@ const AddTeacherModal: React.FC<{ gradeLevels: string[]; onClose: () => void; on
                   ))}
                 </div>
              </div>
+             <div className="md:col-span-2">
+                <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                  <input type="checkbox" checked={form.canUseQuestionBank} onChange={(e) => setForm({...form, canUseQuestionBank: e.target.checked})} className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  <span className="text-sm font-bold text-gray-700">يقدر يستخدم بنك الأسئلة (إضافة أسئلة بس، مش إدارة أو اعتماد)</span>
+                </label>
+             </div>
           </div>
           <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
              <Button variant="secondary" className="flex-1" onClick={onClose}>إلغاء</Button>
@@ -302,6 +318,7 @@ const EditTeacherModal: React.FC<{ teacher: any; gradeLevels: string[]; onClose:
     allSubjects: (teacher.subjects || []).length >= SUBJECT_OPTIONS.length,
     grades: teacher.grades || [],
     teacherType: teacher.teacherType || 'Main',
+    canUseQuestionBank: teacher.canUseQuestionBank || false,
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -367,6 +384,12 @@ const EditTeacherModal: React.FC<{ teacher: any; gradeLevels: string[]; onClose:
                     <button type="button" key={grade} onClick={() => toggleGrade(grade)} className={`px-4 py-2 rounded-xl text-sm font-bold border transition-all ${form.grades.includes(grade) ? 'bg-violet-600 border-violet-600 text-white' : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'}`}>{grade}</button>
                   ))}
                 </div>
+             </div>
+             <div className="md:col-span-2">
+                <label className="flex items-center gap-3 cursor-pointer p-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+                  <input type="checkbox" checked={form.canUseQuestionBank} onChange={(e) => setForm({...form, canUseQuestionBank: e.target.checked})} className="w-4 h-4 rounded border-gray-300 text-violet-600 focus:ring-violet-500" />
+                  <span className="text-sm font-bold text-gray-700">يقدر يستخدم بنك الأسئلة (إضافة أسئلة بس، مش إدارة أو اعتماد)</span>
+                </label>
              </div>
           </div>
           <div className="flex gap-4 mt-8 pt-4 border-t border-gray-100">
@@ -813,6 +836,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
       allSubjects: form.allSubjects,
       grades: form.grades,
       teacherType: form.teacherType,
+      canUseQuestionBank: form.canUseQuestionBank,
     });
     if (ok) {
       refreshTeachers();
@@ -929,6 +953,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ language, role, 
         allSubjects: form.allSubjects,
         grades: form.grades,
         teacherType: form.teacherType,
+        canUseQuestionBank: form.canUseQuestionBank,
       });
       if (id) {
         refreshTeachers();
