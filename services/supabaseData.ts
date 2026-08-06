@@ -1587,3 +1587,40 @@ export async function addLearningOutcome(grade: string, subject: string, outcome
   }
   return data.id;
 }
+
+// ============ ثيم موحّد للمواد (أيقونة ولون) — جدول مشترك مع تاليا ليرن، مربوط باسم المادة نفسه ============
+// أي تعديل من هنا أو من ليرن بيتحدّث في نفس الجدول، فبيبان فورًا في المكانين
+
+export interface SubjectTheme {
+  icon: string;
+  color: string;
+}
+
+const DEFAULT_SUBJECT_THEME: SubjectTheme = { icon: 'book-open', color: 'bg-violet-500' };
+
+export async function getSubjectThemes(): Promise<Record<string, SubjectTheme>> {
+  const { data, error } = await supabase.from('subject_themes').select('subject_name, icon, color');
+  if (error || !data) return {};
+  const map: Record<string, SubjectTheme> = {};
+  for (const row of data) {
+    map[row.subject_name] = { icon: row.icon || DEFAULT_SUBJECT_THEME.icon, color: row.color || DEFAULT_SUBJECT_THEME.color };
+  }
+  return map;
+}
+
+export function getSubjectThemeFor(themes: Record<string, SubjectTheme>, subjectName: string): SubjectTheme {
+  return themes[subjectName] || DEFAULT_SUBJECT_THEME;
+}
+
+export async function upsertSubjectTheme(subjectName: string, theme: SubjectTheme): Promise<boolean> {
+  const { error } = await supabase.from('subject_themes').upsert({
+    subject_name: subjectName,
+    icon: theme.icon,
+    color: theme.color,
+  }, { onConflict: 'subject_name' });
+  if (error) {
+    console.error('Error saving subject theme:', error);
+    return false;
+  }
+  return true;
+}

@@ -3,7 +3,8 @@ import { Language, UserRole, SettingsTab, Course, AcademicYearConfig, Holiday, T
 import { Button } from '../components/Button';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { showToast } from '../components/Toast';
-import { getAllCurriculumSubjectsWithGrade, addCurriculumSubject, updateCurriculumSubjectById, removeCurriculumSubjectById, getTerms, createTerm, updateTerm, deleteTerm } from '../services/supabaseData';
+import { getAllCurriculumSubjectsWithGrade, addCurriculumSubject, updateCurriculumSubjectById, removeCurriculumSubjectById, getTerms, createTerm, updateTerm, deleteTerm, getSubjectThemes, upsertSubjectTheme, getSubjectThemeFor, SubjectTheme } from '../services/supabaseData';
+import { getSubjectIconComponent, SUBJECT_COLOR_OPTIONS, SUBJECT_ICON_OPTIONS } from '../lib/subjectIcons';
 import { getAcademicYears, createAcademicYear, updateAcademicYear, activateAcademicYear, archiveAcademicYear, deleteAcademicYear } from '../services/supabaseData';
 import { getGradeLevels, addGradeLevel, deleteGradeLevel } from '../services/supabaseData';
 import { 
@@ -726,6 +727,17 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     color: 'bg-violet-500',
     gradeLevel: 'الصف 9'
   });
+  const [newCourseIcon, setNewCourseIcon] = useState('book-open');
+  const NewCoursePreviewIcon = getSubjectIconComponent(newCourseIcon);
+  const [subjectThemes, setSubjectThemes] = useState<Record<string, SubjectTheme>>({});
+
+  const refreshSubjectThemes = () => {
+    getSubjectThemes().then(setSubjectThemes);
+  };
+
+  useEffect(() => {
+    refreshSubjectThemes();
+  }, []);
 
   const [gradeLevels, setGradeLevels] = useState<{ id: string; name: string; displayOrder: number }[]>([]);
   const [newGradeLevelName, setNewGradeLevelName] = useState('');
@@ -787,11 +799,15 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
     }
 
     if (ok) {
+      if (newCourse.nameAr) {
+        await upsertSubjectTheme(newCourse.nameAr, { icon: newCourseIcon, color: newCourse.color || 'bg-violet-500' });
+        refreshSubjectThemes();
+      }
       refreshCourses();
       showToast(editingCourseId ? 'تم تعديل المادة بنجاح.' : 'تم إضافة المادة بنجاح.', 'success');
       setCourseViewMode('BROWSE');
       setEditingCourseId(null);
-      setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
+      setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' }); setNewCourseIcon('book-open');
     } else {
       showToast(editingCourseId ? 'حصل خطأ أثناء التعديل.' : 'حصل خطأ أثناء إضافة المادة (ممكن تكون موجودة بالفعل لنفس الصف).', 'error');
     }
@@ -1044,7 +1060,7 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                 <Button 
                   onClick={() => {
                     setEditingCourseId(null);
-                    setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
+                    setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' }); setNewCourseIcon('book-open');
                     setCourseViewMode('WIZARD');
                     setSubjectCreationStep(1);
                   }} 
@@ -1143,9 +1159,12 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                 {courseViewMode === 'BROWSE' ? (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 animate-fadeIn">
-                      {filteredCourses.map(course => (
+                      {filteredCourses.map(course => {
+                        const cardTheme = getSubjectThemeFor(subjectThemes, course.nameAr || '');
+                        const CardIcon = getSubjectIconComponent(cardTheme.icon);
+                        return (
                         <div key={course.id} className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all relative overflow-hidden">
-                          <div className={`absolute top-0 left-0 w-full h-1.5 ${course.color || 'bg-violet-500'}`}></div>
+                          <div className={`absolute top-0 left-0 w-full h-1.5 ${cardTheme.color}`}></div>
                           
                           <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
@@ -1155,14 +1174,15 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                 onChange={() => toggleSelectCourse(course.id)}
                                 className="mt-1"
                               />
-                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${course.color || 'bg-violet-500'}`}>
-                                <BookOpen size={24} />
+                              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${cardTheme.color}`}>
+                                <CardIcon size={24} />
                               </div>
                             </div>
                             <div className="flex gap-1">
                               <button 
                                 onClick={() => {
                                   setNewCourse(course);
+                                  setNewCourseIcon(getSubjectThemeFor(subjectThemes, course.nameAr || '').icon);
                                   setEditingCourseId(course.id);
                                   setCourseViewMode('WIZARD');
                                   setSubjectCreationStep(1);
@@ -1197,12 +1217,13 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                             </span>
                           </div>
                         </div>
-                      ))}
+                      );
+                      })}
 
                       <button 
                         onClick={() => {
                           setEditingCourseId(null);
-                          setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' });
+                          setNewCourse({ code: '', nameEn: '', nameAr: '', credits: 3, department: 'General', color: 'bg-violet-500', gradeLevel: 'الصف 9' }); setNewCourseIcon('book-open');
                           setCourseViewMode('WIZARD');
                           setSubjectCreationStep(1);
                         }}
@@ -1356,6 +1377,39 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
                                   </span>
                                 </div>
                               </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{isRTL ? 'لون المادة' : 'Subject Color'}</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {SUBJECT_COLOR_OPTIONS.map((c) => (
+                                    <button
+                                      key={c}
+                                      type="button"
+                                      onClick={() => setNewCourse({ ...newCourse, color: c })}
+                                      className={`w-9 h-9 rounded-full ${c} flex items-center justify-center transition-transform ${newCourse.color === c ? 'ring-2 ring-offset-2 ring-gray-800 scale-110' : ''}`}
+                                    >
+                                      {newCourse.color === c && <CheckCircle2 size={16} className="text-white" />}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                              <div className="space-y-2 md:col-span-2">
+                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">{isRTL ? 'أيقونة المادة' : 'Subject Icon'}</label>
+                                <div className="grid grid-cols-8 gap-2">
+                                  {SUBJECT_ICON_OPTIONS.map((iconName) => {
+                                    const IconComp = getSubjectIconComponent(iconName);
+                                    return (
+                                      <button
+                                        key={iconName}
+                                        type="button"
+                                        onClick={() => setNewCourseIcon(iconName)}
+                                        className={`w-10 h-10 rounded-xl flex items-center justify-center border transition-colors ${newCourseIcon === iconName ? `${newCourse.color || 'bg-violet-500'} text-white border-transparent` : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-gray-100'}`}
+                                      >
+                                        <IconComp size={18} />
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1374,8 +1428,8 @@ export const Settings: React.FC<SettingsProps> = ({ role, language }) => {
 
                             <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100 space-y-6">
                               <div className="flex items-center gap-6">
-                                <div className="w-20 h-20 bg-white text-violet-600 rounded-[2rem] flex items-center justify-center shadow-sm">
-                                  <BookOpen size={40} />
+                                <div className={`w-20 h-20 ${newCourse.color || 'bg-violet-500'} text-white rounded-[2rem] flex items-center justify-center shadow-sm`}>
+                                  <NewCoursePreviewIcon size={40} />
                                 </div>
                                 <div>
                                   <h5 className="text-2xl font-black text-gray-900">{isRTL ? newCourse.nameAr : newCourse.nameEn}</h5>
